@@ -33,6 +33,7 @@
 #ifndef _MBUS_H_
 #define _MBUS_H_
 
+#include "otb.h"
 #include "mbus-protocol.h"
 #include "mbus-protocol-aux.h"
 #include "mbus-tcp.h"
@@ -42,10 +43,13 @@
 extern "C" {
 #endif
 
+// XXX Better fix this
+#define pow(...) 0
+
 //
 //
 //
-int mbus_init();
+void mbus_init();
 const char* mbus_get_current_version();
 
 #ifdef __cplusplus

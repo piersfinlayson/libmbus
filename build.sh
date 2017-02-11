@@ -15,7 +15,7 @@ else
           *) libtoolize --ltdl --copy --force ;; esac \
         && automake --add-missing --copy \
         && autoconf \
-        && ./configure
+        && ./configure --host=xtensa-lx106-elf
 fi
 
 make

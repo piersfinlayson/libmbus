@@ -8,7 +8,7 @@
 //
 //------------------------------------------------------------------------------
 
-#include <unistd.h>
+//#include <unistd.h>
 #include <limits.h>
 #include <fcntl.h>
 
@@ -17,22 +17,40 @@
 #include <stdio.h>
 #include <strings.h>
 
-#include <termios.h>
+//#include <termios.h>
 #include <errno.h>
 #include <string.h>
 
+#include "mbus.h"
 #include "mbus-serial.h"
 #include "mbus-protocol-aux.h"
 #include "mbus-protocol.h"
 
-#define PACKET_BUFF_SIZE 2048
-
 //------------------------------------------------------------------------------
 /// Set up a serial connection handle.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_serial_connect(mbus_handle *handle)
 {
+    mbus_serial_data *serial_data;
+    Softuart *softuart;
+    
+    if (handle == NULL)
+        return -1;
+
+    serial_data = (mbus_serial_data *) handle->auxdata;
+    if (serial_data == NULL)
+        return -1;
+
+    softuart = &(serial_data->softuart);
+    serial_data->rx_pin = 4;
+    serial_data->tx_pin = 5;
+    Softuart_SetPinRx(softuart, serial_data->rx_pin);
+    Softuart_SetPinTx(softuart, serial_data->tx_pin);
+    Softuart_Init(softuart, serial_data->baudrate);
+    serial_data->inited = 1;
+
+#if 0
     mbus_serial_data *serial_data;
     const char *device;
     struct termios *term;
@@ -49,7 +67,7 @@ mbus_serial_connect(mbus_handle *handle)
     //
     // create the SERIAL connection
     //
-
+    
     // Use blocking read and handle it by serial port VMIN/VTIME setting
     if ((handle->fd = open(device, O_RDWR | O_NOCTTY)) < 0)
     {
@@ -88,6 +106,7 @@ mbus_serial_connect(mbus_handle *handle)
 #endif
 
     tcsetattr(handle->fd, TCSANOW, term);
+#endif
 
     return 0;
 }
@@ -95,10 +114,9 @@ mbus_serial_connect(mbus_handle *handle)
 //------------------------------------------------------------------------------
 // Set baud rate for serial connection
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
 {
-    speed_t speed;
     mbus_serial_data *serial_data;
 
     if (handle == NULL)
@@ -108,70 +126,13 @@ mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
 
     if (serial_data == NULL)
         return -1;
-
-    switch (baudrate)
+        
+    if (serial_data->inited)
     {
-        case 300:
-            speed = B300;
-            serial_data->t.c_cc[VTIME] = (cc_t) 12; // Timeout in 1/10 sec
-            break;
-
-        case 600:
-            speed = B600;
-            serial_data->t.c_cc[VTIME] = (cc_t) 6;  // Timeout in 1/10 sec
-            break;
-
-        case 1200:
-            speed = B1200;
-            serial_data->t.c_cc[VTIME] = (cc_t) 4;  // Timeout in 1/10 sec
-            break;
-
-        case 2400:
-            speed = B2400;
-            serial_data->t.c_cc[VTIME] = (cc_t) 2;  // Timeout in 1/10 sec
-            break;
-
-        case 4800:
-            speed = B4800;
-            serial_data->t.c_cc[VTIME] = (cc_t) 2;  // Timeout in 1/10 sec
-            break;
-
-        case 9600:
-            speed = B9600;
-            serial_data->t.c_cc[VTIME] = (cc_t) 1;  // Timeout in 1/10 sec
-            break;
-
-        case 19200:
-            speed = B19200;
-            serial_data->t.c_cc[VTIME] = (cc_t) 1;  // Timeout in 1/10 sec
-            break;
-
-        case 38400:
-            speed = B38400;
-            serial_data->t.c_cc[VTIME] = (cc_t) 1;  // Timeout in 1/10 sec
-            break;
-
-       default:
-            return -1; // unsupported baudrate
+      return -1;
     }
 
-    // Set input baud rate
-    if (cfsetispeed(&(serial_data->t), speed) != 0)
-    {
-        return -1;
-    }
-
-    // Set output baud rate
-    if (cfsetospeed(&(serial_data->t), speed) != 0)
-    {
-        return -1;
-    }
-
-    // Change baud rate immediately
-    if (tcsetattr(handle->fd, TCSANOW, &(serial_data->t)) != 0)
-    {
-        return -1;
-    }
+    serial_data->baudrate = baudrate;
 
     return 0;
 }
@@ -180,22 +141,30 @@ mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_serial_disconnect(mbus_handle *handle)
 {
+    mbus_serial_data *serial_data;
+
     if (handle == NULL)
     {
         return -1;
     }
 
-    close(handle->fd);
+    serial_data = (mbus_serial_data *) handle->auxdata;
+    if (serial_data == NULL)
+        return -1;
+
+    serial_data->inited = 0;
 
     return 0;
 }
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_serial_data_free(mbus_handle *handle)
 {
+  // No op?
+#if 0
     mbus_serial_data *serial_data;
 
     if (handle)
@@ -211,34 +180,52 @@ mbus_serial_data_free(mbus_handle *handle)
         free(serial_data);
         handle->auxdata = NULL;
     }
+#endif
 }
 
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
 {
     unsigned char buff[PACKET_BUFF_SIZE];
     int len, ret;
+    mbus_serial_data *serial_data;
+    Softuart *softuart;
+    int ii;
 
     if (handle == NULL || frame == NULL)
     {
         return -1;
     }
 
-    // Make sure serial connection is open
-    if (isatty(handle->fd) == 0)
-    {
+    serial_data = (mbus_serial_data *) handle->auxdata;
+    if (serial_data == NULL)
         return -1;
+
+    if (!serial_data->inited)
+    {
+      return -1;
     }
+
+    softuart = &(serial_data->softuart);
 
     if ((len = mbus_frame_pack(frame, buff, sizeof(buff))) == -1)
     {
-        fprintf(stderr, "%s: mbus_frame_pack failed\n", __PRETTY_FUNCTION__);
+        WARN("%s: mbus_frame_pack failed", __PRETTY_FUNCTION__);
         return -1;
     }
+    
+    // XXX Do bit banging of frame at hardcoded speed for now
+    for (ii = 0; ii < len; ii++)
+    {
+      Softuart_Putchar(softuart, buff[ii]);
+    }
+    
+    DEBUG("%s: Sent %d bytes", __PRETTY_FUNCTION__, ii);
 
+#if 0
 #ifdef MBUS_SERIAL_DEBUG
     // if debug, dump in HEX form to stdout what we write to the serial port
     printf("%s: Dumping M-Bus frame [%d bytes]: ", __PRETTY_FUNCTION__, len);
@@ -268,6 +255,7 @@ mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
     // wait until complete frame has been transmitted
     //
     tcdrain(handle->fd);
+#endif
 
     return 0;
 }
@@ -275,81 +263,76 @@ mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
 {
     char buff[PACKET_BUFF_SIZE];
     int remaining, timeouts;
     ssize_t len, nread;
-
+    mbus_serial_data *serial_data;
+    Softuart *softuart;
+    
     if (handle == NULL || frame == NULL)
     {
-        fprintf(stderr, "%s: Invalid parameter.\n", __PRETTY_FUNCTION__);
-        return MBUS_RECV_RESULT_ERROR;
+        return -1;
     }
 
-    // Make sure serial connection is open
-    if (isatty(handle->fd) == 0)
+    serial_data = (mbus_serial_data *) handle->auxdata;
+    if (serial_data == NULL)
+        return -1;
+
+    if (!serial_data->inited)
     {
-        fprintf(stderr, "%s: Serial connection is not available.\n", __PRETTY_FUNCTION__);
-        return MBUS_RECV_RESULT_ERROR;
+      return -1;
     }
+
+    softuart = &(serial_data->softuart);
 
     memset((void *)buff, 0, sizeof(buff));
 
-    //
-    // read data until a packet is received
-    //
-    remaining = 1; // start by reading 1 byte
+    remaining = 1;
     len = 0;
     timeouts = 0;
 
-    do {
-        if (len + remaining > PACKET_BUFF_SIZE)
+    while (remaining > 0)
+    {
+        if (len > PACKET_BUFF_SIZE)
         {
             // avoid out of bounds access
+            WARN("Got too many bytes");
             return MBUS_RECV_RESULT_ERROR;
         }
-
-        //printf("%s: Attempt to read %d bytes [len = %d]\n", __PRETTY_FUNCTION__, remaining, len);
-
-        if ((nread = read(handle->fd, &buff[len], remaining)) == -1)
+        
+        if (Softuart_Available(softuart))
         {
-       //     fprintf(stderr, "%s: aborting recv frame (remaining = %d, len = %d, nread = %d)\n",
-         //          __PRETTY_FUNCTION__, remaining, len, nread);
-            return MBUS_RECV_RESULT_ERROR;
+            buff[len] = Softuart_Read(softuart);
+            INFO("Got byte: 0x%02x", buff[len]);
+            len++;
+            remaining--;
         }
-
-//   printf("%s: Got %d byte [remaining %d, len %d]\n", __PRETTY_FUNCTION__, nread, remaining, len);
-
-        if (nread == 0)
+        else
         {
             timeouts++;
-
             if (timeouts >= 3)
             {
                 // abort to avoid endless loop
-                fprintf(stderr, "%s: Timeout\n", __PRETTY_FUNCTION__);
+                DEBUG("%s: Timeout", __PRETTY_FUNCTION__);
                 break;
             }
         }
-
-        if (len > (SSIZE_MAX-nread))
+        if (remaining == 0)
         {
-            // avoid overflow
-            return MBUS_RECV_RESULT_ERROR;
+            remaining = mbus_parse(frame, buff, len);
+            INFO("Still want %d bytes", remaining);
         }
-
-        len += nread;
-
-    } while ((remaining = mbus_parse(frame, buff, len)) > 0);
-
+    }
+    
     if (len == 0)
     {
         // No data received
         return MBUS_RECV_RESULT_TIMEOUT;
     }
-
+      
     //
     // call the receive event function, if the callback function is registered
     //
@@ -361,12 +344,6 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
         // Would be OK when e.g. scanning the bus, otherwise it is a failure.
         // printf("%s: M-Bus layer failed to receive complete data.\n", __PRETTY_FUNCTION__);
         return MBUS_RECV_RESULT_INVALID;
-    }
-
-    if (len == -1)
-    {
-        fprintf(stderr, "%s: M-Bus layer failed to parse data.\n", __PRETTY_FUNCTION__);
-        return MBUS_RECV_RESULT_ERROR;
     }
 
     return MBUS_RECV_RESULT_OK;

@@ -34,7 +34,7 @@ static int tcp_timeout_usec = 0;
 //------------------------------------------------------------------------------
 /// Setup a TCP/IP handle.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_tcp_connect(mbus_handle *handle)
 {
     char error_str[128], *host;
@@ -96,7 +96,7 @@ mbus_tcp_connect(mbus_handle *handle)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_tcp_data_free(mbus_handle *handle)
 {
     mbus_tcp_data *tcp_data;
@@ -119,7 +119,7 @@ mbus_tcp_data_free(mbus_handle *handle)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_tcp_disconnect(mbus_handle *handle)
 {
     if (handle == NULL)
@@ -135,7 +135,7 @@ mbus_tcp_disconnect(mbus_handle *handle)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_tcp_send_frame(mbus_handle *handle, mbus_frame *frame)
 {
     unsigned char buff[PACKET_BUFF_SIZE];
@@ -175,7 +175,7 @@ mbus_tcp_send_frame(mbus_handle *handle, mbus_frame *frame)
 //------------------------------------------------------------------------------
 //
 //------------------------------------------------------------------------------
-int mbus_tcp_recv_frame(mbus_handle *handle, mbus_frame *frame)
+int ICACHE_FLASH_ATTR mbus_tcp_recv_frame(mbus_handle *handle, mbus_frame *frame)
 {
     char buff[PACKET_BUFF_SIZE];
     int remaining;
@@ -248,7 +248,7 @@ retry:
 /// a read operation will wait before giving up. Note: This configuration has
 /// to be made before calling mbus_tcp_connect.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_tcp_set_timeout_set(double seconds)
 {
     if (seconds < 0.0)

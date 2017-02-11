@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "mbus.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -576,7 +577,7 @@ char *mbus_data_fixed_xml(mbus_data_fixed *data);
 char *mbus_data_error_xml(int error);
 char *mbus_frame_data_xml(mbus_frame_data *data);
 
-char *mbus_data_variable_header_xml(mbus_data_variable_header *header);
+void mbus_data_variable_header_xml(mbus_data_variable_header *header, char *hdr, size_t size);
 
 char *mbus_frame_xml(mbus_frame *frame);
 

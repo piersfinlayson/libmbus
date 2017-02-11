@@ -18,9 +18,11 @@
 #ifndef MBUS_SERIAL_H
 #define MBUS_SERIAL_H
 
-#include <termios.h>
+#define PACKET_BUFF_SIZE 2048
+
 #include "mbus-protocol-aux.h"
 #include "mbus-protocol.h"
+#include "softuart.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,8 +31,11 @@ extern "C" {
 
 typedef struct _mbus_serial_data
 {
-    char *device;
-    struct termios t;
+    char inited;
+    char rx_pin;
+    char tx_pin;
+    int baudrate;
+    Softuart softuart;
 } mbus_serial_data;
 
 int  mbus_serial_connect(mbus_handle *handle);

@@ -10,7 +10,7 @@ HEADERS = mbus.h mbus-protocol.h
 OBJS    = mbus.o mbus-protocol.o
 
 $(LIB): $(OBJS)
-	gcc -shared -o $(LIB) $(OBJS)
+	xtensa-lx106-elf-gcc -shared -o $(LIB) $(OBJS)
 
 all: $(LIB)
 

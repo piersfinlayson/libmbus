@@ -11,6 +11,8 @@
 //
 //------------------------------------------------------------------------------
 
+#include "mbus.h"
+
 #include "mbus-protocol-aux.h"
 #include "mbus-serial.h"
 #include "mbus-tcp.h"
@@ -21,7 +23,8 @@
 #include <math.h>
 
 /*@ignore@*/
-#define MBUS_ERROR(...) fprintf (stderr, __VA_ARGS__)
+//#define MBUS_ERROR(...) fprintf (stderr, __VA_ARGS__)
+#define MBUS_ERROR(...) ERROR_VAR(__VA_ARGS__)
 
 #ifdef _DEBUG_
 #define MBUS_DEBUG(...) fprintf (stderr, __VA_ARGS__)
@@ -39,7 +42,10 @@ typedef struct _mbus_variable_vif {
     const char * quantity;
 } mbus_variable_vif;
 
-mbus_variable_vif vif_table[] = {
+// XXX Need to access this properly!
+// This array can be assigned to read only data as it is not written to (hence added the
+// const.  However, need to access it safely
+const mbus_variable_vif ALIGN4 ICACHE_RODATA_ATTR vif_table[] = {
 /*  Primary VIFs (main table), range 0x00 - 0xFF */
 
     /*  E000 0nnn    Energy Wh (0.001Wh to 10000Wh) */
@@ -669,7 +675,8 @@ mbus_variable_vif vif_table[] = {
 };
 
 
-mbus_variable_vif fixed_table[] = {
+// XXX Need to access this properly
+const mbus_variable_vif ALIGN4 ICACHE_RODATA_ATTR fixed_table[] = {
     /* 00, 01 left out */
     { 0x02, 1.0e0, "Wh", "Energy" },
     { 0x03, 1.0e1, "Wh", "Energy" },
@@ -750,7 +757,7 @@ mbus_variable_vif fixed_table[] = {
 //------------------------------------------------------------------------------
 /// Register a function for receive events.
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_register_recv_event(mbus_handle * handle, void (*event)(unsigned char src_type, const char *buff, size_t len))
 {
     handle->recv_event = event;
@@ -759,7 +766,7 @@ mbus_register_recv_event(mbus_handle * handle, void (*event)(unsigned char src_t
 //------------------------------------------------------------------------------
 /// Register a function for send events.
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_register_send_event(mbus_handle * handle, void (*event)(unsigned char src_type, const char *buff, size_t len))
 {
     handle->send_event = event;
@@ -768,7 +775,7 @@ mbus_register_send_event(mbus_handle * handle, void (*event)(unsigned char src_t
 //------------------------------------------------------------------------------
 /// Register a function for the scan progress.
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_register_scan_progress(mbus_handle * handle, void (*event)(mbus_handle * handle, const char *mask))
 {
     handle->scan_progress = event;
@@ -777,13 +784,13 @@ mbus_register_scan_progress(mbus_handle * handle, void (*event)(mbus_handle * ha
 //------------------------------------------------------------------------------
 /// Register a function for the found events.
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_register_found_event(mbus_handle * handle, void (*event)(mbus_handle * handle, mbus_frame *frame))
 {
     handle->found_event = event;
 }
 
-int mbus_fixed_normalize(int medium_unit, long medium_value, char **unit_out, double *value_out, char **quantity_out)
+int ICACHE_FLASH_ATTR mbus_fixed_normalize(int medium_unit, long medium_value, char **unit_out, double *value_out, char **quantity_out)
 {
     double exponent = 0.0;
     int i;
@@ -798,12 +805,12 @@ int mbus_fixed_normalize(int medium_unit, long medium_value, char **unit_out, do
     switch (medium_unit)
     {
         case 0x00:
-            *unit_out = strdup("h,m,s"); /*  todo convert to unix time... */
-            *quantity_out = strdup("Time");
+            *unit_out = os_strdup("h,m,s"); /*  todo convert to unix time... */
+            *quantity_out = os_strdup("Time");
             break;
         case 0x01:
-            *unit_out = strdup("D,M,Y"); /*  todo convert to unix time... */
-            *quantity_out = strdup("Time");
+            *unit_out = os_strdup("D,M,Y"); /*  todo convert to unix time... */
+            *quantity_out = os_strdup("Time");
             break;
 
     default:
@@ -811,15 +818,15 @@ int mbus_fixed_normalize(int medium_unit, long medium_value, char **unit_out, do
         {
             if (fixed_table[i].vif == medium_unit)
             {
-                *unit_out = strdup(fixed_table[i].unit);
+                *unit_out = os_strdup(fixed_table[i].unit);
                 *value_out = ((double) (medium_value)) * fixed_table[i].exponent;
-                *quantity_out = strdup(fixed_table[i].quantity);
+                *quantity_out = os_strdup(fixed_table[i].quantity);
                 return 0;
             }
         }
 
-        *unit_out = strdup("Unknown");
-        *quantity_out = strdup("Unknown");
+        *unit_out = os_strdup("Unknown");
+        *quantity_out = os_strdup("Unknown");
         exponent = 0.0;
         *value_out = 0.0;
         return -1;
@@ -829,7 +836,7 @@ int mbus_fixed_normalize(int medium_unit, long medium_value, char **unit_out, do
 }
 
 
-int mbus_variable_value_decode(mbus_data_record *record, double *value_out_real, char **value_out_str, int *value_out_str_size)
+int ICACHE_FLASH_ATTR mbus_variable_value_decode(mbus_data_record *record, double *value_out_real, char **value_out_str, int *value_out_str_size)
 {
     int result = 0;
     unsigned char vif, vife;
@@ -877,7 +884,7 @@ int mbus_variable_value_decode(mbus_data_record *record, double *value_out_real,
                         MBUS_ERROR("Unable to allocate memory");
                         return -1;
                     }
-                    *value_out_str_size = snprintf(*value_out_str, 11, "%04d-%02d-%02d",
+                    *value_out_str_size = os_snprintf(*value_out_str, 11, "%04d-%02d-%02d",
                                                  (time.tm_year + 1900),
                                                  (time.tm_mon + 1),
                                                   time.tm_mday);
@@ -909,7 +916,7 @@ int mbus_variable_value_decode(mbus_data_record *record, double *value_out_real,
                         MBUS_ERROR("Unable to allocate memory");
                         return -1;
                     }
-                    *value_out_str_size = snprintf(*value_out_str, 20, "%04d-%02d-%02dT%02d:%02d:%02d",
+                    *value_out_str_size = os_snprintf(*value_out_str, 20, "%04d-%02d-%02dT%02d:%02d:%02d",
                                                  (time.tm_year + 1900),
                                                  (time.tm_mon + 1),
                                                   time.tm_mday,
@@ -944,7 +951,7 @@ int mbus_variable_value_decode(mbus_data_record *record, double *value_out_real,
                         MBUS_ERROR("Unable to allocate memory");
                         return -1;
                     }
-                    *value_out_str_size = snprintf(*value_out_str, 20, "%04d-%02d-%02dT%02d:%02d:%02d",
+                    *value_out_str_size = os_snprintf(*value_out_str, 20, "%04d-%02d-%02dT%02d:%02d:%02d",
                                                  (time.tm_year + 1900),
                                                  (time.tm_mon + 1),
                                                   time.tm_mday,
@@ -1034,7 +1041,7 @@ int mbus_variable_value_decode(mbus_data_record *record, double *value_out_real,
     return result;
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_vif_unit_normalize(int vif, double value, char **unit_out, double *value_out, char **quantity_out)
 {
     int i;
@@ -1053,23 +1060,23 @@ mbus_vif_unit_normalize(int vif, double value, char **unit_out, double *value_ou
     {
         if (vif_table[i].vif == newVif)
         {
-            *unit_out = strdup(vif_table[i].unit);
+            *unit_out = os_strdup(vif_table[i].unit);
             *value_out = value * vif_table[i].exponent;
-            *quantity_out = strdup(vif_table[i].quantity);
+            *quantity_out = os_strdup(vif_table[i].quantity);
             return 0;
         }
     }
 
     MBUS_ERROR("%s: Unknown VIF 0x%03X\n", __PRETTY_FUNCTION__, newVif);
-    *unit_out = strdup("Unknown (VIF=0x%.02X)");
-    *quantity_out = strdup("Unknown");
+    *unit_out = os_strdup("Unknown (VIF=0x%.02X)");
+    *quantity_out = os_strdup("Unknown");
     exponent = 0.0;
     *value_out = 0.0;
     return -1;
 }
 
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_vib_unit_normalize(mbus_value_information_block *vib, double value, char **unit_out, double *value_out, char **quantity_out)
 {
     int code;
@@ -1116,8 +1123,8 @@ mbus_vib_unit_normalize(mbus_value_information_block *vib, double value, char **
                  (vib->vif == 0xFC))
         {
             // custom VIF
-            *unit_out = strdup("-");
-            *quantity_out = strdup(vib->custom_vif);
+            *unit_out = os_strdup("-");
+            *quantity_out = os_strdup(vib->custom_vif);
             *value_out = value;
         }
         else
@@ -1166,7 +1173,7 @@ mbus_vib_unit_normalize(mbus_value_information_block *vib, double value, char **
 }
 
 
-mbus_record *
+mbus_record * ICACHE_FLASH_ATTR 
 mbus_record_new()
 {
     mbus_record * record;
@@ -1189,7 +1196,7 @@ mbus_record_new()
 }
 
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_record_free(mbus_record * rec)
 {
     if (rec)
@@ -1222,7 +1229,7 @@ mbus_record_free(mbus_record * rec)
 }
 
 
-mbus_record *
+mbus_record * ICACHE_FLASH_ATTR 
 mbus_parse_fixed_record(char status_byte, char medium_unit, unsigned char *data)
 {
     long value = 0;
@@ -1235,7 +1242,7 @@ mbus_parse_fixed_record(char status_byte, char medium_unit, unsigned char *data)
     }
 
     /* shared/static memory - get own copy */
-    record->function_medium = strdup(mbus_data_fixed_function((int)status_byte));  /* stored / actual */
+    record->function_medium = os_strdup(mbus_data_fixed_function((int)status_byte));  /* stored / actual */
 
     if (record->function_medium == NULL)
     {
@@ -1266,7 +1273,7 @@ mbus_parse_fixed_record(char status_byte, char medium_unit, unsigned char *data)
 }
 
 
-mbus_record *
+mbus_record * ICACHE_FLASH_ATTR 
 mbus_parse_variable_record(mbus_data_record *data)
 {
     mbus_record * record = NULL;
@@ -1296,11 +1303,11 @@ mbus_parse_variable_record(mbus_data_record *data)
     {
         if (data->drh.dib.dif == MBUS_DIB_DIF_MORE_RECORDS_FOLLOW)
         {
-            record->function_medium = strdup("More records follow");
+            record->function_medium = os_strdup("More records follow");
         }
         else
         {
-            record->function_medium = strdup("Manufacturer specific");
+            record->function_medium = os_strdup("Manufacturer specific");
         }
 
         if (record->function_medium == NULL)
@@ -1334,7 +1341,7 @@ mbus_parse_variable_record(mbus_data_record *data)
     }
     else
     {
-        record->function_medium = strdup(mbus_data_record_function(data));
+        record->function_medium = os_strdup(mbus_data_record_function(data));
 
         if (record->function_medium == NULL)
         {
@@ -1382,7 +1389,7 @@ mbus_parse_variable_record(mbus_data_record *data)
 //------------------------------------------------------------------------------
 /// Generate XML for variable-length data
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_data_variable_xml_normalized(mbus_data_variable *data)
 {
     mbus_data_record *record;
@@ -1391,6 +1398,7 @@ mbus_data_variable_xml_normalized(mbus_data_variable *data)
     char str_encoded[768] = "";
     size_t len = 0, buff_size = 8192;
     size_t i;
+    char var_hdr[1024];
 
     if (data)
     {
@@ -1399,11 +1407,13 @@ mbus_data_variable_xml_normalized(mbus_data_variable *data)
         if (buff == NULL)
             return NULL;
 
-        len += snprintf(&buff[len], buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
+        len += os_snprintf(&buff[len], buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
 
-        len += snprintf(&buff[len], buff_size - len, "<MBusData>\n\n");
+        len += os_snprintf(&buff[len], buff_size - len, "<MBusData>\n\n");
 
-        len += snprintf(&buff[len], buff_size - len, "%s", mbus_data_variable_header_xml(&(data->header)));
+        
+        mbus_data_variable_header_xml(&(data->header), var_hdr, 1024);
+        len += os_snprintf(&buff[len], buff_size - len, "%s", var_hdr);
 
         for (record = data->record, i = 0; record; record = record->next, i++)
         {
@@ -1411,50 +1421,50 @@ mbus_data_variable_xml_normalized(mbus_data_variable *data)
 
             if ((buff_size - len) < 1024)
             {
-                buff_size *= 2;
-                new_buff = (char*) realloc(buff,buff_size);
-
+                new_buff = (char *)malloc(buff_size*2);
                 if (new_buff == NULL)
                 {
                     mbus_record_free(norm_record);
                     free(buff);
                     return NULL;
                 }
+                memcpy(new_buff, buff, buff_size);
+                buff_size *= 2;
 
                 buff = new_buff;
             }
 
-            len += snprintf(&buff[len], buff_size - len, "    <DataRecord id=\"%zu\">\n", i);
+            len += os_snprintf(&buff[len], buff_size - len, "    <DataRecord id=\"%zu\">\n", i);
 
             if (norm_record != NULL)
             {
                 mbus_str_xml_encode(str_encoded, norm_record->function_medium, sizeof(str_encoded));
-                len += snprintf(&buff[len], buff_size - len, "        <Function>%s</Function>\n", str_encoded);
+                len += os_snprintf(&buff[len], buff_size - len, "        <Function>%s</Function>\n", str_encoded);
 
-                len += snprintf(&buff[len], buff_size - len, "        <StorageNumber>%ld</StorageNumber>\n", norm_record->storage_number);
+                len += os_snprintf(&buff[len], buff_size - len, "        <StorageNumber>%ld</StorageNumber>\n", norm_record->storage_number);
 
                 if (norm_record->tariff >= 0)
                 {
-                    len += snprintf(&buff[len], buff_size - len, "        <Tariff>%ld</Tariff>\n", norm_record->tariff);
-                    len += snprintf(&buff[len], buff_size - len, "        <Device>%d</Device>\n", norm_record->device);
+                    len += os_snprintf(&buff[len], buff_size - len, "        <Tariff>%ld</Tariff>\n", norm_record->tariff);
+                    len += os_snprintf(&buff[len], buff_size - len, "        <Device>%d</Device>\n", norm_record->device);
                 }
 
                 mbus_str_xml_encode(str_encoded, norm_record->unit, sizeof(str_encoded));
 
-                len += snprintf(&buff[len], buff_size - len, "        <Unit>%s</Unit>\n", str_encoded);
+                len += os_snprintf(&buff[len], buff_size - len, "        <Unit>%s</Unit>\n", str_encoded);
 
                 mbus_str_xml_encode(str_encoded, norm_record->quantity, sizeof(str_encoded));
-                len += snprintf(&buff[len], buff_size - len, "        <Quantity>%s</Quantity>\n", str_encoded);
+                len += os_snprintf(&buff[len], buff_size - len, "        <Quantity>%s</Quantity>\n", str_encoded);
 
 
                 if (norm_record->is_numeric)
                 {
-                    len += snprintf(&buff[len], buff_size - len, "        <Value>%f</Value>\n", norm_record->value.real_val);
+                    len += os_snprintf(&buff[len], buff_size - len, "        <Value>%f</Value>\n", norm_record->value.real_val);
                 }
                 else
                 {
                     mbus_str_xml_encode(str_encoded, norm_record->value.str_val.value, sizeof(str_encoded));
-                    len += snprintf(&buff[len], buff_size - len, "        <Value>%s</Value>\n", str_encoded);
+                    len += os_snprintf(&buff[len], buff_size - len, "        <Value>%s</Value>\n", str_encoded);
                 }
 
                 mbus_record_free(norm_record);
@@ -1463,10 +1473,10 @@ mbus_data_variable_xml_normalized(mbus_data_variable *data)
             {
             }
 
-            len += snprintf(&buff[len], buff_size - len, "    </DataRecord>\n\n");
+            len += os_snprintf(&buff[len], buff_size - len, "    </DataRecord>\n\n");
         }
 
-        len += snprintf(&buff[len], buff_size - len, "</MBusData>\n");
+        len += os_snprintf(&buff[len], buff_size - len, "</MBusData>\n");
 
         return buff;
     }
@@ -1477,7 +1487,7 @@ mbus_data_variable_xml_normalized(mbus_data_variable *data)
 //------------------------------------------------------------------------------
 /// Return a string containing an XML representation of the M-BUS frame data.
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_frame_data_xml_normalized(mbus_frame_data *data)
 {
     if (data)
@@ -1496,7 +1506,7 @@ mbus_frame_data_xml_normalized(mbus_frame_data *data)
     return NULL;
 }
 
-mbus_handle *
+mbus_handle * ICACHE_FLASH_ATTR 
 mbus_context_serial(const char *device)
 {
     mbus_handle *handle;
@@ -1511,7 +1521,7 @@ mbus_context_serial(const char *device)
 
     if ((serial_data = (mbus_serial_data *)malloc(sizeof(mbus_serial_data))) == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for handle\n", __PRETTY_FUNCTION__);
+        os_snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for handle\n", __PRETTY_FUNCTION__);
         mbus_error_str_set(error_str);
         free(handle);
         return NULL;
@@ -1522,6 +1532,7 @@ mbus_context_serial(const char *device)
     handle->is_serial = 1;
     handle->purge_first_frame = MBUS_FRAME_PURGE_M2S;
     handle->auxdata = serial_data;
+    memset(serial_data, 0, sizeof(mbus_serial_data));
     handle->open = mbus_serial_connect;
     handle->close = mbus_serial_disconnect;
     handle->recv = mbus_serial_recv_frame;
@@ -1532,19 +1543,22 @@ mbus_context_serial(const char *device)
     handle->scan_progress = NULL;
     handle->found_event = NULL;
 
-    if ((serial_data->device = strdup(device)) == NULL)
+#if 0
+    if ((serial_data->device = os_strdup(device)) == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for device\n", __PRETTY_FUNCTION__);
+        os_snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for device\n", __PRETTY_FUNCTION__);
         mbus_error_str_set(error_str);
         free(serial_data);
         free(handle);
         return NULL;
     }
+#endif
 
     return handle;
 }
 
-mbus_handle *
+#if 0
+mbus_handle * ICACHE_FLASH_ATTR 
 mbus_context_tcp(const char *host, uint16_t port)
 {
     mbus_handle *handle;
@@ -1559,7 +1573,7 @@ mbus_context_tcp(const char *host, uint16_t port)
 
     if ((tcp_data = (mbus_tcp_data *)malloc(sizeof(mbus_tcp_data))) == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for handle\n", __PRETTY_FUNCTION__);
+        os_snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for handle\n", __PRETTY_FUNCTION__);
         mbus_error_str_set(error_str);
         free(handle);
         return NULL;
@@ -1581,9 +1595,9 @@ mbus_context_tcp(const char *host, uint16_t port)
     handle->found_event = NULL;
 
     tcp_data->port = port;
-    if ((tcp_data->host = strdup(host)) == NULL)
+    if ((tcp_data->host = os_strdup(host)) == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for host\n", __PRETTY_FUNCTION__);
+        os_snprintf(error_str, sizeof(error_str), "%s: failed to allocate memory for host\n", __PRETTY_FUNCTION__);
         mbus_error_str_set(error_str);
         free(tcp_data);
         free(handle);
@@ -1592,8 +1606,9 @@ mbus_context_tcp(const char *host, uint16_t port)
 
     return handle;
 }
+#endif
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_context_free(mbus_handle * handle)
 {
     if (handle)
@@ -1603,7 +1618,7 @@ mbus_context_free(mbus_handle * handle)
     }
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_connect(mbus_handle * handle)
 {
     if (handle == NULL)
@@ -1615,7 +1630,7 @@ mbus_connect(mbus_handle * handle)
     return handle->open(handle);
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_disconnect(mbus_handle * handle)
 {
     if (handle == NULL)
@@ -1627,7 +1642,7 @@ mbus_disconnect(mbus_handle * handle)
     return handle->close(handle);
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_context_set_option(mbus_handle * handle, mbus_context_option option, long value)
 {
     if (handle == NULL)
@@ -1666,7 +1681,7 @@ mbus_context_set_option(mbus_handle * handle, mbus_context_option option, long v
     return -1; // unable to set option
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_recv_frame(mbus_handle * handle, mbus_frame *frame)
 {
     int result = 0;
@@ -1700,13 +1715,15 @@ mbus_recv_frame(mbus_handle * handle, mbus_frame *frame)
     if (frame != NULL)
     {
         /* set timestamp to receive time */
-        time(&(frame->timestamp));
+        //time(&(frame->timestamp));
+        // XXX Fix this to use an ESP time function
+        frame->timestamp = 0;
     }
 
     return result;
 }
 
-int mbus_purge_frames(mbus_handle *handle)
+int ICACHE_FLASH_ATTR mbus_purge_frames(mbus_handle *handle)
 {
     int err, received;
     mbus_frame reply;
@@ -1727,7 +1744,7 @@ int mbus_purge_frames(mbus_handle *handle)
     return received;
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_frame(mbus_handle * handle, mbus_frame *frame)
 {
     if (handle == NULL)
@@ -1744,7 +1761,7 @@ mbus_send_frame(mbus_handle * handle, mbus_frame *frame)
 // a slave to be the active secondary addressed slave if the secondary address
 // matches that of the slave.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_select_frame(mbus_handle * handle, const char *secondary_addr_str)
 {
     mbus_frame *frame;
@@ -1773,7 +1790,7 @@ mbus_send_select_frame(mbus_handle * handle, const char *secondary_addr_str)
 // send a user data packet from master to slave: the packet let the
 // adressed slave(s) switch to the given baudrate
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_switch_baudrate_frame(mbus_handle * handle, int address, long baudrate)
 {
     int retval = 0;
@@ -1843,7 +1860,7 @@ mbus_send_switch_baudrate_frame(mbus_handle * handle, int address, long baudrate
 // send a user data packet from master to slave: the packet resets
 // the application layer in the slave
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_application_reset_frame(mbus_handle * handle, int address, int subcode)
 {
     int retval = 0;
@@ -1897,7 +1914,7 @@ mbus_send_application_reset_frame(mbus_handle * handle, int address, int subcode
 //------------------------------------------------------------------------------
 // send a request packet to from master to slave
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_request_frame(mbus_handle * handle, int address)
 {
     int retval = 0;
@@ -1933,7 +1950,7 @@ mbus_send_request_frame(mbus_handle * handle, int address)
 //------------------------------------------------------------------------------
 // send a user data packet from master to slave
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_user_data_frame(mbus_handle * handle, int address, const unsigned char *data, size_t data_size)
 {
     int retval = 0;
@@ -1985,7 +2002,7 @@ mbus_send_user_data_frame(mbus_handle * handle, int address, const unsigned char
 // send a request from master to slave and collect the reply (replies)
 // from the slave.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_sendrecv_request(mbus_handle *handle, int address, mbus_frame *reply, int max_frames)
 {
     int retval = 0, more_frames = 1, retry = 0;
@@ -2150,7 +2167,7 @@ mbus_sendrecv_request(mbus_handle *handle, int address, mbus_frame *reply, int m
 //------------------------------------------------------------------------------
 // send a data request packet to from master to slave and optional purge response
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_send_ping_frame(mbus_handle *handle, int address, char purge_response)
 {
     int retval = 0;
@@ -2192,7 +2209,7 @@ mbus_send_ping_frame(mbus_handle *handle, int address, char purge_response)
 //------------------------------------------------------------------------------
 // Select a device using the supplied secondary address  (mask).
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_select_secondary_address(mbus_handle * handle, const char *mask)
 {
     int ret;
@@ -2248,7 +2265,7 @@ mbus_select_secondary_address(mbus_handle * handle, const char *mask)
 // Probe for the presence of a device(s) using the supplied secondary address
 // (mask).
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_probe_secondary_address(mbus_handle *handle, const char *mask, char *matching_addr)
 {
     int ret, i;
@@ -2309,7 +2326,7 @@ mbus_probe_secondary_address(mbus_handle *handle, const char *mask, char *matchi
                     return MBUS_PROBE_NOTHING;
                 }
 
-                snprintf(matching_addr, 17, "%s", addr);
+                os_snprintf(matching_addr, 17, "%s", addr);
 
                 if (handle->found_event)
                 {
@@ -2336,7 +2353,7 @@ mbus_probe_secondary_address(mbus_handle *handle, const char *mask, char *matchi
 }
 
 
-int mbus_read_slave(mbus_handle * handle, mbus_address *address, mbus_frame * reply)
+int ICACHE_FLASH_ATTR mbus_read_slave(mbus_handle * handle, mbus_address *address, mbus_frame * reply)
 {
     if (handle == NULL || address == NULL)
     {
@@ -2411,7 +2428,7 @@ int mbus_read_slave(mbus_handle * handle, mbus_address *address, mbus_frame * re
 //------------------------------------------------------------------------------
 // Iterate over all address masks according to the M-Bus probe algorithm.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_scan_2nd_address_range(mbus_handle * handle, int pos, char *addr_mask)
 {
     int i, i_start, i_end, probe_ret;
@@ -2434,7 +2451,7 @@ mbus_scan_2nd_address_range(mbus_handle * handle, int pos, char *addr_mask)
         return 0;
     }
 
-    if ((mask = strdup(addr_mask)) == NULL)
+    if ((mask = os_strdup(addr_mask)) == NULL)
     {
         MBUS_ERROR("%s: Failed to allocate local copy of the address mask.\n", __PRETTY_FUNCTION__);
         return -1;
@@ -2477,7 +2494,7 @@ mbus_scan_2nd_address_range(mbus_handle * handle, int pos, char *addr_mask)
             {
                 if (!handle->found_event)
                 {
-                    printf("Found a device on secondary address %s [using address mask %s]\n", matching_mask, mask);
+                    INFO("XXXXXXXXXXXXXXXXXXXXXXXXXX Found a device on secondary address %s [using address mask %s]\n", matching_mask, mask);
                 }
             }
             else if (probe_ret == MBUS_PROBE_COLLISION)
@@ -2506,7 +2523,7 @@ mbus_scan_2nd_address_range(mbus_handle * handle, int pos, char *addr_mask)
 // - invalid character stops convertion
 // - whitespaces will be ignored
 //------------------------------------------------------------------------------
-size_t
+size_t ICACHE_FLASH_ATTR 
 mbus_hex2bin(unsigned char * dst, size_t dst_len, const unsigned char * src, size_t src_len)
 {
     size_t i, result = 0;

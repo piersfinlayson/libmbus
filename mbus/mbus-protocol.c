@@ -8,11 +8,12 @@
 //
 //------------------------------------------------------------------------------
 
-#include <assert.h>
-#include <ctype.h>
+//#include <assert.h>
+//#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "mbus.h"
 #include "mbus-protocol.h"
 
 static int parse_debug = 0, debug = 0;
@@ -24,7 +25,7 @@ static char error_str[512];
 // Returns the manufacturer ID according to the manufacturer's 3 byte ASCII code
 // or zero when there was an error.
 //------------------------------------------------------------------------------
-unsigned int
+unsigned int ICACHE_FLASH_ATTR 
 mbus_manufacturer_id(char *manufacturer)
 {
     unsigned int id;
@@ -58,18 +59,18 @@ mbus_manufacturer_id(char *manufacturer)
 //------------------------------------------------------------------------------
 // internal data
 //------------------------------------------------------------------------------
-static mbus_slave_data slave_data[MBUS_MAX_PRIMARY_SLAVES];
+static mbus_slave_data ICACHE_RODATA_ATTR slave_data[MBUS_MAX_PRIMARY_SLAVES];
 
 //
 //  trace callbacks
 //
-void
+void ICACHE_FLASH_ATTR 
 mbus_dump_recv_event(unsigned char src_type, const char *buff, size_t len)
 {
     mbus_hex_dump("RECV", buff, len);
 }
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_dump_send_event(unsigned char src_type, const char *buff, size_t len)
 {
     mbus_hex_dump("SEND", buff, len);
@@ -78,32 +79,32 @@ mbus_dump_send_event(unsigned char src_type, const char *buff, size_t len)
 //------------------------------------------------------------------------------
 /// Return a string that contains an the latest error message.
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_error_str()
 {
     return error_str;
 }
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_error_str_set(char *message)
 {
     if (message)
     {
-        snprintf(error_str, sizeof(error_str), "%s", message);
+        os_snprintf(error_str, sizeof(error_str), "%s", message);
     }
 }
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_error_reset()
 {
-    snprintf(error_str, sizeof(error_str), "no errors");
+    os_snprintf(error_str, sizeof(error_str), "no errors");
 }
 
 //------------------------------------------------------------------------------
 /// Return a pointer to the slave_data register. This register can be used for
 /// storing current slave status.
 //------------------------------------------------------------------------------
-mbus_slave_data *
+mbus_slave_data * ICACHE_FLASH_ATTR 
 mbus_slave_data_get(size_t i)
 {
     if (i < MBUS_MAX_PRIMARY_SLAVES)
@@ -124,12 +125,12 @@ mbus_slave_data_get(size_t i)
 /// Allocate an M-bus frame data structure and initialize it according to which
 /// frame type is requested.
 //------------------------------------------------------------------------------
-mbus_frame *
+mbus_frame * ICACHE_FLASH_ATTR 
 mbus_frame_new(int frame_type)
 {
     mbus_frame *frame = NULL;
 
-    if ((frame = malloc(sizeof(mbus_frame))) != NULL)
+    if ((frame = (mbus_frame *)malloc(sizeof(mbus_frame))) != NULL)
     {
         memset((void *)frame, 0, sizeof(mbus_frame));
 
@@ -175,7 +176,7 @@ mbus_frame_new(int frame_type)
 //------------------------------------------------------------------------------
 /// Free the memory resources allocated for the M-Bus frame data structure.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_free(mbus_frame *frame)
 {
     if (frame)
@@ -192,13 +193,13 @@ mbus_frame_free(mbus_frame *frame)
 //------------------------------------------------------------------------------
 /// Caclulate the checksum of the M-Bus frame. Internal.
 //------------------------------------------------------------------------------
-unsigned char
+unsigned char ICACHE_FLASH_ATTR 
 calc_checksum(mbus_frame *frame)
 {
     size_t i;
     unsigned char cksum;
 
-    assert(frame != NULL);
+    OTB_ASSERT(frame != NULL);
     switch(frame->type)
     {
         case MBUS_FRAME_TYPE_SHORT:
@@ -242,7 +243,7 @@ calc_checksum(mbus_frame *frame)
 /// arithmetic sum of the frame content, without using carry. Which content
 /// that is included in the checksum calculation depends on the frame type.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_calc_checksum(mbus_frame *frame)
 {
     if (frame)
@@ -268,10 +269,10 @@ mbus_frame_calc_checksum(mbus_frame *frame)
 ///
 /// Calculate the values of the lengths fields in the M-Bus frame. Internal.
 ///
-unsigned char
+unsigned char ICACHE_FLASH_ATTR 
 calc_length(const mbus_frame *frame)
 {
-    assert(frame != NULL);
+    OTB_ASSERT(frame != NULL);
     switch(frame->type)
     {
         case MBUS_FRAME_TYPE_CONTROL:
@@ -286,7 +287,7 @@ calc_length(const mbus_frame *frame)
 //------------------------------------------------------------------------------
 /// Calculate the values of the lengths fields in the M-Bus frame.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_calc_length(mbus_frame *frame)
 {
     if (frame)
@@ -313,7 +314,7 @@ mbus_frame_type(mbus_frame *frame)
 //------------------------------------------------------------------------------
 /// Return the M-Bus frame direction
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_direction(mbus_frame *frame)
 {
     if (frame)
@@ -342,7 +343,7 @@ mbus_frame_direction(mbus_frame *frame)
 // 5) checksum
 //
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_verify(mbus_frame *frame)
 {
     unsigned char checksum;
@@ -357,7 +358,7 @@ mbus_frame_verify(mbus_frame *frame)
             case MBUS_FRAME_TYPE_SHORT:
                 if(frame->start1 != MBUS_FRAME_SHORT_START)
                 {
-                    snprintf(error_str, sizeof(error_str), "No frame start");
+                    os_snprintf(error_str, sizeof(error_str), "No frame start");
 
                     return -1;
                 }
@@ -368,7 +369,7 @@ mbus_frame_verify(mbus_frame *frame)
                     (frame->control !=  MBUS_CONTROL_MASK_REQ_UD2)                          &&
                     (frame->control != (MBUS_CONTROL_MASK_REQ_UD2 | MBUS_CONTROL_MASK_FCB)))
                 {
-                    snprintf(error_str, sizeof(error_str), "Unknown Control Code 0x%.2x", frame->control);
+                    os_snprintf(error_str, sizeof(error_str), "Unknown Control Code 0x%.2x", frame->control);
 
                     return -1;
                 }
@@ -380,7 +381,7 @@ mbus_frame_verify(mbus_frame *frame)
                 if(frame->start1  != MBUS_FRAME_CONTROL_START ||
                    frame->start2  != MBUS_FRAME_CONTROL_START)
                 {
-                    snprintf(error_str, sizeof(error_str), "No frame start");
+                    os_snprintf(error_str, sizeof(error_str), "No frame start");
 
                     return -1;
                 }
@@ -392,21 +393,21 @@ mbus_frame_verify(mbus_frame *frame)
                     (frame->control != (MBUS_CONTROL_MASK_RSP_UD | MBUS_CONTROL_MASK_ACD)) &&
                     (frame->control != (MBUS_CONTROL_MASK_RSP_UD | MBUS_CONTROL_MASK_DFC | MBUS_CONTROL_MASK_ACD)))
                 {
-                    snprintf(error_str, sizeof(error_str), "Unknown Control Code 0x%.2x", frame->control);
+                    os_snprintf(error_str, sizeof(error_str), "Unknown Control Code 0x%.2x", frame->control);
 
                     return -1;
                 }
 
                 if (frame->length1 != frame->length2)
                 {
-                    snprintf(error_str, sizeof(error_str), "Frame length 1 != 2");
+                    os_snprintf(error_str, sizeof(error_str), "Frame length 1 != 2");
 
                     return -1;
                 }
 
                 if (frame->length1 != calc_length(frame))
                 {
-                    snprintf(error_str, sizeof(error_str), "Frame length 1 != calc length");
+                    os_snprintf(error_str, sizeof(error_str), "Frame length 1 != calc length");
 
                     return -1;
                 }
@@ -414,14 +415,14 @@ mbus_frame_verify(mbus_frame *frame)
                 break;
 
             default:
-                snprintf(error_str, sizeof(error_str), "Unknown frame type 0x%.2x", frame->type);
+                os_snprintf(error_str, sizeof(error_str), "Unknown frame type 0x%.2x", frame->type);
 
                 return -1;
         }
 
         if(frame->stop != MBUS_FRAME_STOP)
         {
-            snprintf(error_str, sizeof(error_str), "No frame stop");
+            os_snprintf(error_str, sizeof(error_str), "No frame stop");
 
             return -1;
         }
@@ -430,7 +431,7 @@ mbus_frame_verify(mbus_frame *frame)
 
         if(frame->checksum != checksum)
         {
-            snprintf(error_str, sizeof(error_str), "Invalid checksum (0x%.2x != 0x%.2x)", frame->checksum, checksum);
+            os_snprintf(error_str, sizeof(error_str), "Invalid checksum (0x%.2x != 0x%.2x)", frame->checksum, checksum);
 
             return -1;
         }
@@ -438,7 +439,7 @@ mbus_frame_verify(mbus_frame *frame)
         return 0;
     }
 
-    snprintf(error_str, sizeof(error_str), "Got null pointer to frame.");
+    os_snprintf(error_str, sizeof(error_str), "Got null pointer to frame.");
 
     return -1;
 }
@@ -455,7 +456,7 @@ mbus_frame_verify(mbus_frame *frame)
 /// Encode BCD data
 ///
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_bcd_encode(unsigned char *bcd_data, size_t bcd_data_size, int value)
 {
     int v0, v1, v2, x1, x2;
@@ -488,7 +489,7 @@ mbus_data_bcd_encode(unsigned char *bcd_data, size_t bcd_data_size, int value)
 /// Decode BCD data
 ///
 //------------------------------------------------------------------------------
-long long
+long long ICACHE_FLASH_ATTR 
 mbus_data_bcd_decode(unsigned char *bcd_data, size_t bcd_data_size)
 {
     long long val = 0;
@@ -513,7 +514,7 @@ mbus_data_bcd_decode(unsigned char *bcd_data, size_t bcd_data_size)
 /// Decode INTEGER data
 ///
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_int_decode(unsigned char *int_data, size_t int_data_size, int *value)
 {
     size_t i;
@@ -547,7 +548,7 @@ mbus_data_int_decode(unsigned char *int_data, size_t int_data_size, int *value)
     return 0;
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_long_decode(unsigned char *int_data, size_t int_data_size, long *value)
 {
     size_t i;
@@ -581,7 +582,7 @@ mbus_data_long_decode(unsigned char *int_data, size_t int_data_size, long *value
     return 0;
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_long_long_decode(unsigned char *int_data, size_t int_data_size, long long *value)
 {
     size_t i;
@@ -620,7 +621,7 @@ mbus_data_long_long_decode(unsigned char *int_data, size_t int_data_size, long l
 /// Encode INTEGER data (into 'int_data_size' bytes)
 ///
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_int_encode(unsigned char *int_data, size_t int_data_size, int value)
 {
     int i;
@@ -645,7 +646,7 @@ mbus_data_int_encode(unsigned char *int_data, size_t int_data_size, int value)
 /// see also http://en.wikipedia.org/wiki/Single-precision_floating-point_format
 ///
 //------------------------------------------------------------------------------
-float
+float ICACHE_FLASH_ATTR 
 mbus_data_float_decode(unsigned char *float_data)
 {
 #ifdef _HAS_NON_IEEE754_FLOAT
@@ -702,7 +703,7 @@ mbus_data_float_decode(unsigned char *float_data)
 /// Decode string data.
 ///
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_data_str_decode(unsigned char *dst, const unsigned char *src, size_t len)
 {
     size_t i;
@@ -723,7 +724,7 @@ mbus_data_str_decode(unsigned char *dst, const unsigned char *src, size_t len)
 /// Decode binary data.
 ///
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_data_bin_decode(unsigned char *dst, const unsigned char *src, size_t len, size_t max_len)
 {
     size_t i, pos;
@@ -734,7 +735,7 @@ mbus_data_bin_decode(unsigned char *dst, const unsigned char *src, size_t len, s
     if (src && dst)
     {
         while((i < len) && ((pos+3) < max_len)) {
-            pos += snprintf(&dst[pos], max_len - pos, "%.2X ", src[i]);
+            pos += os_snprintf(&dst[pos], max_len - pos, "%.2X ", src[i]);
             i++;
         }
 
@@ -761,7 +762,7 @@ mbus_data_bin_decode(unsigned char *dst, const unsigned char *src, size_t len, s
 ///   J = 3 bytes (Time)
 ///
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_data_tm_decode(struct tm *t, unsigned char *t_data, size_t t_data_size)
 {
     if (t == NULL)
@@ -823,7 +824,7 @@ mbus_data_tm_decode(struct tm *t, unsigned char *t_data, size_t t_data_size)
 /// Generate manufacturer code from 2-byte encoded data
 ///
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_manufacturer_encode(unsigned char *m_data, unsigned char *m_code)
 {
     int m_val;
@@ -845,7 +846,7 @@ mbus_data_manufacturer_encode(unsigned char *m_data, unsigned char *m_code)
 /// Generate manufacturer code from 2-byte encoded data
 ///
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_decode_manufacturer(unsigned char byte1, unsigned char byte2)
 {
     static char m_str[4];
@@ -1297,7 +1298,7 @@ mbus_data_product_name(mbus_data_variable_header *header)
 ///
 /// For fixed-length frames, get a string describing the medium.
 ///
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_fixed_medium(mbus_data_fixed *data)
 {
     static char buff[256];
@@ -1307,55 +1308,55 @@ mbus_data_fixed_medium(mbus_data_fixed *data)
         switch ( (data->cnt1_type&0xC0)>>6 | (data->cnt2_type&0xC0)>>4 )
         {
             case 0x00:
-                snprintf(buff, sizeof(buff), "Other");
+                os_snprintf(buff, sizeof(buff), "Other");
                 break;
             case 0x01:
-                snprintf(buff, sizeof(buff), "Oil");
+                os_snprintf(buff, sizeof(buff), "Oil");
                 break;
             case 0x02:
-                snprintf(buff, sizeof(buff), "Electricity");
+                os_snprintf(buff, sizeof(buff), "Electricity");
                 break;
             case 0x03:
-                snprintf(buff, sizeof(buff), "Gas");
+                os_snprintf(buff, sizeof(buff), "Gas");
                 break;
             case 0x04:
-                snprintf(buff, sizeof(buff), "Heat");
+                os_snprintf(buff, sizeof(buff), "Heat");
                 break;
             case 0x05:
-                snprintf(buff, sizeof(buff), "Steam");
+                os_snprintf(buff, sizeof(buff), "Steam");
                 break;
             case 0x06:
-                snprintf(buff, sizeof(buff), "Hot Water");
+                os_snprintf(buff, sizeof(buff), "Hot Water");
                 break;
             case 0x07:
-                snprintf(buff, sizeof(buff), "Water");
+                os_snprintf(buff, sizeof(buff), "Water");
                 break;
             case 0x08:
-                snprintf(buff, sizeof(buff), "H.C.A.");
+                os_snprintf(buff, sizeof(buff), "H.C.A.");
                 break;
             case 0x09:
-                snprintf(buff, sizeof(buff), "Reserved");
+                os_snprintf(buff, sizeof(buff), "Reserved");
                 break;
             case 0x0A:
-                snprintf(buff, sizeof(buff), "Gas Mode 2");
+                os_snprintf(buff, sizeof(buff), "Gas Mode 2");
                 break;
             case 0x0B:
-                snprintf(buff, sizeof(buff), "Heat Mode 2");
+                os_snprintf(buff, sizeof(buff), "Heat Mode 2");
                 break;
             case 0x0C:
-                snprintf(buff, sizeof(buff), "Hot Water Mode 2");
+                os_snprintf(buff, sizeof(buff), "Hot Water Mode 2");
                 break;
             case 0x0D:
-                snprintf(buff, sizeof(buff), "Water Mode 2");
+                os_snprintf(buff, sizeof(buff), "Water Mode 2");
                 break;
             case 0x0E:
-                snprintf(buff, sizeof(buff), "H.C.A. Mode 2");
+                os_snprintf(buff, sizeof(buff), "H.C.A. Mode 2");
                 break;
             case 0x0F:
-                snprintf(buff, sizeof(buff), "Reserved");
+                os_snprintf(buff, sizeof(buff), "Reserved");
                 break;
             default:
-                snprintf(buff, sizeof(buff), "unknown");
+                os_snprintf(buff, sizeof(buff), "unknown");
                 break;
         }
 
@@ -1408,7 +1409,7 @@ mbus_data_fixed_medium(mbus_data_fixed *data)
 ///
 /// For fixed-length frames, get a string describing the unit of the data.
 ///
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_fixed_unit(int medium_unit_byte)
 {
     static char buff[256];
@@ -1416,200 +1417,200 @@ mbus_data_fixed_unit(int medium_unit_byte)
     switch (medium_unit_byte & 0x3F)
     {
         case 0x00:
-            snprintf(buff, sizeof(buff), "h,m,s");
+            os_snprintf(buff, sizeof(buff), "h,m,s");
             break;
         case 0x01:
-            snprintf(buff, sizeof(buff), "D,M,Y");
+            os_snprintf(buff, sizeof(buff), "D,M,Y");
             break;
 
         case 0x02:
-            snprintf(buff, sizeof(buff), "Wh");
+            os_snprintf(buff, sizeof(buff), "Wh");
             break;
         case 0x03:
-            snprintf(buff, sizeof(buff), "10 Wh");
+            os_snprintf(buff, sizeof(buff), "10 Wh");
             break;
         case 0x04:
-            snprintf(buff, sizeof(buff), "100 Wh");
+            os_snprintf(buff, sizeof(buff), "100 Wh");
             break;
         case 0x05:
-            snprintf(buff, sizeof(buff), "kWh");
+            os_snprintf(buff, sizeof(buff), "kWh");
             break;
         case 0x06:
-            snprintf(buff, sizeof(buff), "10 kWh");
+            os_snprintf(buff, sizeof(buff), "10 kWh");
             break;
         case 0x07:
-            snprintf(buff, sizeof(buff), "100 kWh");
+            os_snprintf(buff, sizeof(buff), "100 kWh");
             break;
         case 0x08:
-            snprintf(buff, sizeof(buff), "MWh");
+            os_snprintf(buff, sizeof(buff), "MWh");
             break;
         case 0x09:
-            snprintf(buff, sizeof(buff), "10 MWh");
+            os_snprintf(buff, sizeof(buff), "10 MWh");
             break;
         case 0x0A:
-            snprintf(buff, sizeof(buff), "100 MWh");
+            os_snprintf(buff, sizeof(buff), "100 MWh");
             break;
 
         case 0x0B:
-            snprintf(buff, sizeof(buff), "kJ");
+            os_snprintf(buff, sizeof(buff), "kJ");
             break;
         case 0x0C:
-            snprintf(buff, sizeof(buff), "10 kJ");
+            os_snprintf(buff, sizeof(buff), "10 kJ");
             break;
         case 0x0E:
-            snprintf(buff, sizeof(buff), "100 kJ");
+            os_snprintf(buff, sizeof(buff), "100 kJ");
             break;
         case 0x0D:
-            snprintf(buff, sizeof(buff), "MJ");
+            os_snprintf(buff, sizeof(buff), "MJ");
             break;
         case 0x0F:
-            snprintf(buff, sizeof(buff), "10 MJ");
+            os_snprintf(buff, sizeof(buff), "10 MJ");
             break;
         case 0x10:
-            snprintf(buff, sizeof(buff), "100 MJ");
+            os_snprintf(buff, sizeof(buff), "100 MJ");
             break;
         case 0x11:
-            snprintf(buff, sizeof(buff), "GJ");
+            os_snprintf(buff, sizeof(buff), "GJ");
             break;
         case 0x12:
-            snprintf(buff, sizeof(buff), "10 GJ");
+            os_snprintf(buff, sizeof(buff), "10 GJ");
             break;
         case 0x13:
-            snprintf(buff, sizeof(buff), "100 GJ");
+            os_snprintf(buff, sizeof(buff), "100 GJ");
             break;
 
         case 0x14:
-            snprintf(buff, sizeof(buff), "W");
+            os_snprintf(buff, sizeof(buff), "W");
             break;
         case 0x15:
-            snprintf(buff, sizeof(buff), "10 W");
+            os_snprintf(buff, sizeof(buff), "10 W");
             break;
         case 0x16:
-            snprintf(buff, sizeof(buff), "100 W");
+            os_snprintf(buff, sizeof(buff), "100 W");
             break;
         case 0x17:
-            snprintf(buff, sizeof(buff), "kW");
+            os_snprintf(buff, sizeof(buff), "kW");
             break;
         case 0x18:
-            snprintf(buff, sizeof(buff), "10 kW");
+            os_snprintf(buff, sizeof(buff), "10 kW");
             break;
         case 0x19:
-            snprintf(buff, sizeof(buff), "100 kW");
+            os_snprintf(buff, sizeof(buff), "100 kW");
             break;
         case 0x1A:
-            snprintf(buff, sizeof(buff), "MW");
+            os_snprintf(buff, sizeof(buff), "MW");
             break;
         case 0x1B:
-            snprintf(buff, sizeof(buff), "10 MW");
+            os_snprintf(buff, sizeof(buff), "10 MW");
             break;
         case 0x1C:
-            snprintf(buff, sizeof(buff), "100 MW");
+            os_snprintf(buff, sizeof(buff), "100 MW");
             break;
 
         case 0x1D:
-            snprintf(buff, sizeof(buff), "kJ/h");
+            os_snprintf(buff, sizeof(buff), "kJ/h");
             break;
         case 0x1E:
-            snprintf(buff, sizeof(buff), "10 kJ/h");
+            os_snprintf(buff, sizeof(buff), "10 kJ/h");
             break;
         case 0x1F:
-            snprintf(buff, sizeof(buff), "100 kJ/h");
+            os_snprintf(buff, sizeof(buff), "100 kJ/h");
             break;
         case 0x20:
-            snprintf(buff, sizeof(buff), "MJ/h");
+            os_snprintf(buff, sizeof(buff), "MJ/h");
             break;
         case 0x21:
-            snprintf(buff, sizeof(buff), "10 MJ/h");
+            os_snprintf(buff, sizeof(buff), "10 MJ/h");
             break;
         case 0x22:
-            snprintf(buff, sizeof(buff), "100 MJ/h");
+            os_snprintf(buff, sizeof(buff), "100 MJ/h");
             break;
         case 0x23:
-            snprintf(buff, sizeof(buff), "GJ/h");
+            os_snprintf(buff, sizeof(buff), "GJ/h");
             break;
         case 0x24:
-            snprintf(buff, sizeof(buff), "10 GJ/h");
+            os_snprintf(buff, sizeof(buff), "10 GJ/h");
             break;
         case 0x25:
-            snprintf(buff, sizeof(buff), "100 GJ/h");
+            os_snprintf(buff, sizeof(buff), "100 GJ/h");
             break;
 
         case 0x26:
-            snprintf(buff, sizeof(buff), "ml");
+            os_snprintf(buff, sizeof(buff), "ml");
             break;
         case 0x27:
-            snprintf(buff, sizeof(buff), "10 ml");
+            os_snprintf(buff, sizeof(buff), "10 ml");
             break;
         case 0x28:
-            snprintf(buff, sizeof(buff), "100 ml");
+            os_snprintf(buff, sizeof(buff), "100 ml");
             break;
         case 0x29:
-            snprintf(buff, sizeof(buff), "l");
+            os_snprintf(buff, sizeof(buff), "l");
             break;
         case 0x2A:
-            snprintf(buff, sizeof(buff), "10 l");
+            os_snprintf(buff, sizeof(buff), "10 l");
             break;
         case 0x2B:
-            snprintf(buff, sizeof(buff), "100 l");
+            os_snprintf(buff, sizeof(buff), "100 l");
             break;
         case 0x2C:
-            snprintf(buff, sizeof(buff), "m^3");
+            os_snprintf(buff, sizeof(buff), "m^3");
             break;
         case 0x2D:
-            snprintf(buff, sizeof(buff), "10 m^3");
+            os_snprintf(buff, sizeof(buff), "10 m^3");
             break;
         case 0x2E:
-            snprintf(buff, sizeof(buff), "m^3");
+            os_snprintf(buff, sizeof(buff), "m^3");
             break;
 
         case 0x2F:
-            snprintf(buff, sizeof(buff), "ml/h");
+            os_snprintf(buff, sizeof(buff), "ml/h");
             break;
         case 0x30:
-            snprintf(buff, sizeof(buff), "10 ml/h");
+            os_snprintf(buff, sizeof(buff), "10 ml/h");
             break;
         case 0x31:
-            snprintf(buff, sizeof(buff), "100 ml/h");
+            os_snprintf(buff, sizeof(buff), "100 ml/h");
             break;
         case 0x32:
-            snprintf(buff, sizeof(buff), "l/h");
+            os_snprintf(buff, sizeof(buff), "l/h");
             break;
         case 0x33:
-            snprintf(buff, sizeof(buff), "10 l/h");
+            os_snprintf(buff, sizeof(buff), "10 l/h");
             break;
         case 0x34:
-            snprintf(buff, sizeof(buff), "100 l/h");
+            os_snprintf(buff, sizeof(buff), "100 l/h");
             break;
         case 0x35:
-            snprintf(buff, sizeof(buff), "m^3/h");
+            os_snprintf(buff, sizeof(buff), "m^3/h");
             break;
         case 0x36:
-            snprintf(buff, sizeof(buff), "10 m^3/h");
+            os_snprintf(buff, sizeof(buff), "10 m^3/h");
             break;
         case 0x37:
-            snprintf(buff, sizeof(buff), "100 m^3/h");
+            os_snprintf(buff, sizeof(buff), "100 m^3/h");
             break;
 
         case 0x38:
-            snprintf(buff, sizeof(buff), "1e-3 °C");
+            os_snprintf(buff, sizeof(buff), "1e-3 °C");
             break;
         case 0x39:
-            snprintf(buff, sizeof(buff), "units for HCA");
+            os_snprintf(buff, sizeof(buff), "units for HCA");
             break;
         case 0x3A:
         case 0x3B:
         case 0x3C:
         case 0x3D:
-            snprintf(buff, sizeof(buff), "reserved");
+            os_snprintf(buff, sizeof(buff), "reserved");
             break;
         case 0x3E:
-            snprintf(buff, sizeof(buff), "reserved but historic");
+            os_snprintf(buff, sizeof(buff), "reserved but historic");
             break;
         case 0x3F:
-            snprintf(buff, sizeof(buff), "without units");
+            os_snprintf(buff, sizeof(buff), "without units");
             break;
         default:
-            snprintf(buff, sizeof(buff), "unknown");
+            os_snprintf(buff, sizeof(buff), "unknown");
             break;
     }
 
@@ -1652,7 +1653,7 @@ mbus_data_fixed_unit(int medium_unit_byte)
 ///
 /// For variable-length frames, returns a string describing the medium.
 ///
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_variable_medium_lookup(unsigned char medium)
 {
     static char buff[256];
@@ -1660,94 +1661,94 @@ mbus_data_variable_medium_lookup(unsigned char medium)
     switch (medium)
     {
         case MBUS_VARIABLE_DATA_MEDIUM_OTHER:
-            snprintf(buff, sizeof(buff), "Other");
+            os_snprintf(buff, sizeof(buff), "Other");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_OIL:
-            snprintf(buff, sizeof(buff), "Oil");
+            os_snprintf(buff, sizeof(buff), "Oil");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_ELECTRICITY:
-            snprintf(buff, sizeof(buff), "Electricity");
+            os_snprintf(buff, sizeof(buff), "Electricity");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_GAS:
-            snprintf(buff, sizeof(buff), "Gas");
+            os_snprintf(buff, sizeof(buff), "Gas");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_HEAT_OUT:
-            snprintf(buff, sizeof(buff), "Heat: Outlet");
+            os_snprintf(buff, sizeof(buff), "Heat: Outlet");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_STEAM:
-            snprintf(buff, sizeof(buff), "Steam");
+            os_snprintf(buff, sizeof(buff), "Steam");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_HOT_WATER:
-            snprintf(buff, sizeof(buff), "Hot water");
+            os_snprintf(buff, sizeof(buff), "Hot water");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_WATER:
-            snprintf(buff, sizeof(buff), "Water");
+            os_snprintf(buff, sizeof(buff), "Water");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_HEAT_COST:
-            snprintf(buff, sizeof(buff), "Heat Cost Allocator");
+            os_snprintf(buff, sizeof(buff), "Heat Cost Allocator");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_COMPR_AIR:
-            snprintf(buff, sizeof(buff), "Compressed Air");
+            os_snprintf(buff, sizeof(buff), "Compressed Air");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_COOL_OUT:
-            snprintf(buff, sizeof(buff), "Cooling load meter: Outlet");
+            os_snprintf(buff, sizeof(buff), "Cooling load meter: Outlet");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_COOL_IN:
-            snprintf(buff, sizeof(buff), "Cooling load meter: Inlet");
+            os_snprintf(buff, sizeof(buff), "Cooling load meter: Inlet");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_HEAT_IN:
-            snprintf(buff, sizeof(buff), "Heat: Inlet");
+            os_snprintf(buff, sizeof(buff), "Heat: Inlet");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_HEAT_COOL:
-            snprintf(buff, sizeof(buff), "Heat / Cooling load meter");
+            os_snprintf(buff, sizeof(buff), "Heat / Cooling load meter");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_BUS:
-            snprintf(buff, sizeof(buff), "Bus/System");
+            os_snprintf(buff, sizeof(buff), "Bus/System");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_UNKNOWN:
-            snprintf(buff, sizeof(buff), "Unknown Medium");
+            os_snprintf(buff, sizeof(buff), "Unknown Medium");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_COLD_WATER:
-            snprintf(buff, sizeof(buff), "Cold water");
+            os_snprintf(buff, sizeof(buff), "Cold water");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_DUAL_WATER:
-            snprintf(buff, sizeof(buff), "Dual water");
+            os_snprintf(buff, sizeof(buff), "Dual water");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_PRESSURE:
-            snprintf(buff, sizeof(buff), "Pressure");
+            os_snprintf(buff, sizeof(buff), "Pressure");
             break;
 
         case MBUS_VARIABLE_DATA_MEDIUM_ADC:
-            snprintf(buff, sizeof(buff), "A/D Converter");
+            os_snprintf(buff, sizeof(buff), "A/D Converter");
             break;
 
         case 0x10: // - 0x15
         case 0x20: // - 0xFF
-            snprintf(buff, sizeof(buff), "Reserved");
+            os_snprintf(buff, sizeof(buff), "Reserved");
             break;
 
 
         // add more ...
         default:
-            snprintf(buff, sizeof(buff), "Unknown medium (0x%.2x)", medium);
+            os_snprintf(buff, sizeof(buff), "Unknown medium (0x%.2x)", medium);
             break;
     }
 
@@ -1759,7 +1760,7 @@ mbus_data_variable_medium_lookup(unsigned char medium)
 /// Lookup the unit description from a VIF field in a data record
 ///
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_unit_prefix(int exp)
 {
     static char buff[256];
@@ -1771,43 +1772,43 @@ mbus_unit_prefix(int exp)
             break;
 
         case -3:
-            snprintf(buff, sizeof(buff), "m");
+            os_snprintf(buff, sizeof(buff), "m");
             break;
 
         case -6:
-            snprintf(buff, sizeof(buff), "my");
+            os_snprintf(buff, sizeof(buff), "my");
             break;
 
         case 1:
-            snprintf(buff, sizeof(buff), "10 ");
+            os_snprintf(buff, sizeof(buff), "10 ");
             break;
 
         case 2:
-            snprintf(buff, sizeof(buff), "100 ");
+            os_snprintf(buff, sizeof(buff), "100 ");
             break;
 
         case 3:
-            snprintf(buff, sizeof(buff), "k");
+            os_snprintf(buff, sizeof(buff), "k");
             break;
 
         case 4:
-            snprintf(buff, sizeof(buff), "10 k");
+            os_snprintf(buff, sizeof(buff), "10 k");
             break;
 
         case 5:
-            snprintf(buff, sizeof(buff), "100 k");
+            os_snprintf(buff, sizeof(buff), "100 k");
             break;
 
         case 6:
-            snprintf(buff, sizeof(buff), "M");
+            os_snprintf(buff, sizeof(buff), "M");
             break;
 
         case 9:
-            snprintf(buff, sizeof(buff), "T");
+            os_snprintf(buff, sizeof(buff), "T");
             break;
 
         default:
-            snprintf(buff, sizeof(buff), "1e%d ", exp);
+            os_snprintf(buff, sizeof(buff), "1e%d ", exp);
     }
 
     return buff;
@@ -1869,7 +1870,7 @@ mbus_dif_datalength_lookup(unsigned char dif)
 ///
 /// See section 8.4.3  Codes for Value Information Field (VIF) in the M-BUS spec
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_vif_unit_lookup(unsigned char vif)
 {
     static char buff[256];
@@ -1887,7 +1888,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x00+6:
         case 0x00+7:
             n = (vif & 0x07) - 3;
-            snprintf(buff, sizeof(buff), "Energy (%sWh)", mbus_unit_prefix(n));
+            os_snprintf(buff, sizeof(buff), "Energy (%sWh)", mbus_unit_prefix(n));
             break;
 
         // 0000 1nnn          Energy       10(nnn)J     (0.001kJ to 10000kJ)
@@ -1901,7 +1902,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x08+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Energy (%sJ)", mbus_unit_prefix(n));
+            os_snprintf(buff, sizeof(buff), "Energy (%sJ)", mbus_unit_prefix(n));
 
             break;
 
@@ -1916,7 +1917,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x18+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Mass (%skg)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "Mass (%skg)", mbus_unit_prefix(n-3));
 
             break;
 
@@ -1931,8 +1932,8 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x28+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Power (%sW)", mbus_unit_prefix(n-3));
-            //snprintf(buff, sizeof(buff), "Power (10^%d W)", n-3);
+            os_snprintf(buff, sizeof(buff), "Power (%sW)", mbus_unit_prefix(n-3));
+            //os_snprintf(buff, sizeof(buff), "Power (10^%d W)", n-3);
 
             break;
 
@@ -1947,7 +1948,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x30+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Power (%sJ/h)", mbus_unit_prefix(n));
+            os_snprintf(buff, sizeof(buff), "Power (%sJ/h)", mbus_unit_prefix(n));
 
             break;
 
@@ -1962,7 +1963,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x10+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Volume (%s m^3)", mbus_unit_prefix(n-6));
+            os_snprintf(buff, sizeof(buff), "Volume (%s m^3)", mbus_unit_prefix(n-6));
 
             break;
 
@@ -1977,7 +1978,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x38+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Volume flow (%s m^3/h)", mbus_unit_prefix(n-6));
+            os_snprintf(buff, sizeof(buff), "Volume flow (%s m^3/h)", mbus_unit_prefix(n-6));
 
             break;
 
@@ -1992,7 +1993,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x40+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Volume flow (%s m^3/min)", mbus_unit_prefix(n-7));
+            os_snprintf(buff, sizeof(buff), "Volume flow (%s m^3/min)", mbus_unit_prefix(n-7));
 
             break;
 
@@ -2007,7 +2008,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x48+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Volume flow (%s m^3/s)", mbus_unit_prefix(n-9));
+            os_snprintf(buff, sizeof(buff), "Volume flow (%s m^3/s)", mbus_unit_prefix(n-9));
 
             break;
 
@@ -2022,7 +2023,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x50+7:
 
             n = (vif & 0x07);
-            snprintf(buff, sizeof(buff), "Mass flow (%s kg/h)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "Mass flow (%s kg/h)", mbus_unit_prefix(n-3));
 
             break;
 
@@ -2033,7 +2034,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x58+3:
 
             n = (vif & 0x03);
-            snprintf(buff, sizeof(buff), "Flow temperature (%sdeg C)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "Flow temperature (%sdeg C)", mbus_unit_prefix(n-3));
 
             break;
 
@@ -2044,7 +2045,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x5C+3:
 
             n = (vif & 0x03);
-            snprintf(buff, sizeof(buff), "Return temperature (%sdeg C)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "Return temperature (%sdeg C)", mbus_unit_prefix(n-3));
 
             break;
 
@@ -2055,7 +2056,7 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x68+3:
 
             n = (vif & 0x03);
-            snprintf(buff, sizeof(buff), "Pressure (%s bar)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "Pressure (%s bar)", mbus_unit_prefix(n-3));
 
             break;
 
@@ -2087,27 +2088,27 @@ mbus_vif_unit_lookup(unsigned char vif)
                 int offset;
 
                 if      ((vif & 0x7C) == 0x20)
-                    offset = snprintf(buff, sizeof(buff), "On time ");
+                    offset = os_snprintf(buff, sizeof(buff), "On time ");
                 else if ((vif & 0x7C) == 0x24)
-                    offset = snprintf(buff, sizeof(buff), "Operating time ");
+                    offset = os_snprintf(buff, sizeof(buff), "Operating time ");
                 else if ((vif & 0x7C) == 0x70)
-                    offset = snprintf(buff, sizeof(buff), "Averaging Duration ");
+                    offset = os_snprintf(buff, sizeof(buff), "Averaging Duration ");
                 else
-                    offset = snprintf(buff, sizeof(buff), "Actuality Duration ");
+                    offset = os_snprintf(buff, sizeof(buff), "Actuality Duration ");
 
                 switch (vif & 0x03)
                 {
                     case 0x00:
-                        snprintf(&buff[offset], sizeof(buff)-offset, "(seconds)");
+                        os_snprintf(&buff[offset], sizeof(buff)-offset, "(seconds)");
                         break;
                     case 0x01:
-                        snprintf(&buff[offset], sizeof(buff)-offset, "(minutes)");
+                        os_snprintf(&buff[offset], sizeof(buff)-offset, "(minutes)");
                         break;
                     case 0x02:
-                        snprintf(&buff[offset], sizeof(buff)-offset, "(hours)");
+                        os_snprintf(&buff[offset], sizeof(buff)-offset, "(hours)");
                         break;
                     case 0x03:
-                        snprintf(&buff[offset], sizeof(buff)-offset, "(days)");
+                        os_snprintf(&buff[offset], sizeof(buff)-offset, "(days)");
                         break;
                 }
             }
@@ -2122,9 +2123,9 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x6C+1:
 
             if (vif & 0x1)
-                snprintf(buff, sizeof(buff), "Time Point (time & date)");
+                os_snprintf(buff, sizeof(buff), "Time Point (time & date)");
             else
-                snprintf(buff, sizeof(buff), "Time Point (date)");
+                os_snprintf(buff, sizeof(buff), "Time Point (date)");
 
             break;
 
@@ -2136,7 +2137,7 @@ mbus_vif_unit_lookup(unsigned char vif)
 
             n = (vif & 0x03);
 
-            snprintf(buff, sizeof(buff), "Temperature Difference (%s deg C)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "Temperature Difference (%s deg C)", mbus_unit_prefix(n-3));
 
             break;
 
@@ -2147,43 +2148,43 @@ mbus_vif_unit_lookup(unsigned char vif)
         case 0x64+3:
 
             n = (vif & 0x03);
-            snprintf(buff, sizeof(buff), "External temperature (%s deg C)", mbus_unit_prefix(n-3));
+            os_snprintf(buff, sizeof(buff), "External temperature (%s deg C)", mbus_unit_prefix(n-3));
 
             break;
 
         // E110 1110 Units for H.C.A. dimensionless
         case 0x6E:
-            snprintf(buff, sizeof(buff), "Units for H.C.A.");
+            os_snprintf(buff, sizeof(buff), "Units for H.C.A.");
             break;
 
         // E110 1111 Reserved
         case 0x6F:
-            snprintf(buff, sizeof(buff), "Reserved");
+            os_snprintf(buff, sizeof(buff), "Reserved");
             break;
 
         // Custom VIF in the following string: never reached...
         case 0x7C:
-            snprintf(buff, sizeof(buff), "Custom VIF");
+            os_snprintf(buff, sizeof(buff), "Custom VIF");
             break;
 
         // Fabrication No
         case 0x78:
-            snprintf(buff, sizeof(buff), "Fabrication number");
+            os_snprintf(buff, sizeof(buff), "Fabrication number");
             break;
 
         // Bus Address
         case 0x7A:
-            snprintf(buff, sizeof(buff), "Bus Address");
+            os_snprintf(buff, sizeof(buff), "Bus Address");
             break;
 
         // Manufacturer specific: 7Fh / FF
         case 0x7F:
         case 0xFF:
-            snprintf(buff, sizeof(buff), "Manufacturer specific");
+            os_snprintf(buff, sizeof(buff), "Manufacturer specific");
             break;
 
         default:
-            snprintf(buff, sizeof(buff), "Unknown (VIF=0x%.2X)", vif);
+            os_snprintf(buff, sizeof(buff), "Unknown (VIF=0x%.2X)", vif);
             break;
     }
 
@@ -2197,7 +2198,7 @@ mbus_vif_unit_lookup(unsigned char vif)
 //
 // See section 6.6  Codes for general application errors in the M-BUS spec
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_error_lookup(int error)
 {
     static char buff[256];
@@ -2205,47 +2206,47 @@ mbus_data_error_lookup(int error)
     switch (error)
     {
         case MBUS_ERROR_DATA_UNSPECIFIED:
-            snprintf(buff, sizeof(buff), "Unspecified error");
+            os_snprintf(buff, sizeof(buff), "Unspecified error");
             break;
 
         case MBUS_ERROR_DATA_UNIMPLEMENTED_CI:
-            snprintf(buff, sizeof(buff), "Unimplemented CI-Field");
+            os_snprintf(buff, sizeof(buff), "Unimplemented CI-Field");
             break;
 
         case MBUS_ERROR_DATA_BUFFER_TOO_LONG:
-            snprintf(buff, sizeof(buff), "Buffer too long, truncated");
+            os_snprintf(buff, sizeof(buff), "Buffer too long, truncated");
             break;
 
         case MBUS_ERROR_DATA_TOO_MANY_RECORDS:
-            snprintf(buff, sizeof(buff), "Too many records");
+            os_snprintf(buff, sizeof(buff), "Too many records");
             break;
 
         case MBUS_ERROR_DATA_PREMATURE_END:
-            snprintf(buff, sizeof(buff), "Premature end of record");
+            os_snprintf(buff, sizeof(buff), "Premature end of record");
             break;
 
         case MBUS_ERROR_DATA_TOO_MANY_DIFES:
-            snprintf(buff, sizeof(buff), "More than 10 DIFE´s");
+            os_snprintf(buff, sizeof(buff), "More than 10 DIFE´s");
             break;
 
         case MBUS_ERROR_DATA_TOO_MANY_VIFES:
-            snprintf(buff, sizeof(buff), "More than 10 VIFE´s");
+            os_snprintf(buff, sizeof(buff), "More than 10 VIFE´s");
             break;
 
         case MBUS_ERROR_DATA_RESERVED:
-            snprintf(buff, sizeof(buff), "Reserved");
+            os_snprintf(buff, sizeof(buff), "Reserved");
             break;
 
         case MBUS_ERROR_DATA_APPLICATION_BUSY:
-            snprintf(buff, sizeof(buff), "Application busy");
+            os_snprintf(buff, sizeof(buff), "Application busy");
             break;
 
         case MBUS_ERROR_DATA_TOO_MANY_READOUTS:
-            snprintf(buff, sizeof(buff), "Too many readouts");
+            os_snprintf(buff, sizeof(buff), "Too many readouts");
             break;
 
         default:
-            snprintf(buff, sizeof(buff), "Unknown error (0x%.2X)", error);
+            os_snprintf(buff, sizeof(buff), "Unknown error (0x%.2X)", error);
             break;
     }
 
@@ -2266,7 +2267,7 @@ mbus_data_error_lookup(int error)
 //    E000 1110      Firmware version #
 //    E000 1111      Software version #
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_vib_unit_lookup(mbus_value_information_block *vib)
 {
     static char buff[256];
@@ -2279,112 +2280,112 @@ mbus_vib_unit_lookup(mbus_value_information_block *vib)
     {
         if (vib->nvife == 0)
         {
-            snprintf(buff, sizeof(buff), "Missing VIF extension");
+            os_snprintf(buff, sizeof(buff), "Missing VIF extension");
         }
         else if (vib->vife[0] == 0x08 || vib->vife[0] == 0x88)
         {
             // E000 1000
-            snprintf(buff, sizeof(buff), "Access Number (transmission count)");
+            os_snprintf(buff, sizeof(buff), "Access Number (transmission count)");
         }
         else if (vib->vife[0] == 0x09|| vib->vife[0] == 0x89)
         {
             // E000 1001
-            snprintf(buff, sizeof(buff), "Medium (as in fixed header)");
+            os_snprintf(buff, sizeof(buff), "Medium (as in fixed header)");
         }
         else if (vib->vife[0] == 0x0A || vib->vife[0] == 0x8A)
         {
             // E000 1010
-            snprintf(buff, sizeof(buff), "Manufacturer (as in fixed header)");
+            os_snprintf(buff, sizeof(buff), "Manufacturer (as in fixed header)");
         }
         else if (vib->vife[0] == 0x0B || vib->vife[0] == 0x8B)
         {
             // E000 1010
-            snprintf(buff, sizeof(buff), "Parameter set identification");
+            os_snprintf(buff, sizeof(buff), "Parameter set identification");
         }
         else if (vib->vife[0] == 0x0C || vib->vife[0] == 0x8C)
         {
             // E000 1100
-            snprintf(buff, sizeof(buff), "Model / Version");
+            os_snprintf(buff, sizeof(buff), "Model / Version");
         }
         else if (vib->vife[0] == 0x0D || vib->vife[0] == 0x8D)
         {
             // E000 1100
-            snprintf(buff, sizeof(buff), "Hardware version");
+            os_snprintf(buff, sizeof(buff), "Hardware version");
         }
         else if (vib->vife[0] == 0x0E || vib->vife[0] == 0x8E)
         {
             // E000 1101
-            snprintf(buff, sizeof(buff), "Firmware version");
+            os_snprintf(buff, sizeof(buff), "Firmware version");
         }
         else if (vib->vife[0] == 0x0F || vib->vife[0] == 0x8F)
         {
             // E000 1101
-            snprintf(buff, sizeof(buff), "Software version");
+            os_snprintf(buff, sizeof(buff), "Software version");
         }
         else if (vib->vife[0] == 0x16)
         {
             // VIFE = E001 0110 Password
-            snprintf(buff, sizeof(buff), "Password");
+            os_snprintf(buff, sizeof(buff), "Password");
         }
         else if (vib->vife[0] == 0x17 || vib->vife[0] == 0x97)
         {
             // VIFE = E001 0111 Error flags
-            snprintf(buff, sizeof(buff), "Error flags");
+            os_snprintf(buff, sizeof(buff), "Error flags");
         }
         else if (vib->vife[0] == 0x10)
         {
             // VIFE = E001 0000 Customer location
-            snprintf(buff, sizeof(buff), "Customer location");
+            os_snprintf(buff, sizeof(buff), "Customer location");
         }
         else if (vib->vife[0] == 0x11)
         {
             // VIFE = E001 0001 Customer
-            snprintf(buff, sizeof(buff), "Customer");
+            os_snprintf(buff, sizeof(buff), "Customer");
         }
         else if (vib->vife[0] == 0x1A)
         {
             // VIFE = E001 1010 Digital output (binary)
-            snprintf(buff, sizeof(buff), "Digital output (binary)");
+            os_snprintf(buff, sizeof(buff), "Digital output (binary)");
         }
         else if (vib->vife[0] == 0x1B)
         {
             // VIFE = E001 1011 Digital input (binary)
-            snprintf(buff, sizeof(buff), "Digital input (binary)");
+            os_snprintf(buff, sizeof(buff), "Digital input (binary)");
         }
         else if ((vib->vife[0] & 0x70) == 0x40)
         {
             // VIFE = E100 nnnn 10^(nnnn-9) V
             n = (vib->vife[0] & 0x0F);
-            snprintf(buff, sizeof(buff), "%s V", mbus_unit_prefix(n-9));
+            os_snprintf(buff, sizeof(buff), "%s V", mbus_unit_prefix(n-9));
         }
         else if ((vib->vife[0] & 0x70) == 0x50)
         {
             // VIFE = E101 nnnn 10nnnn-12 A
             n = (vib->vife[0] & 0x0F);
-            snprintf(buff, sizeof(buff), "%s A", mbus_unit_prefix(n-12));
+            os_snprintf(buff, sizeof(buff), "%s A", mbus_unit_prefix(n-12));
         }
         else if ((vib->vife[0] & 0xF0) == 0x70)
         {
             // VIFE = E111 nnn Reserved
-            snprintf(buff, sizeof(buff), "Reserved VIF extension");
+            os_snprintf(buff, sizeof(buff), "Reserved VIF extension");
         }
         else
         {
-            snprintf(buff, sizeof(buff), "Unrecognized VIF extension: 0x%.2x", vib->vife[0]);
+            os_snprintf(buff, sizeof(buff), "Unrecognized VIF extension: 0x%.2x", vib->vife[0]);
         }
         return buff;
     }
     else if (vib->vif == 0x7C)
     {
         // custom VIF
-        snprintf(buff, sizeof(buff), "%s", vib->custom_vif);
+        os_snprintf(buff, sizeof(buff), "%s", vib->custom_vif);
         return buff;
     }
     else if (vib->vif == 0xFC && (vib->vife[0] & 0x78) == 0x70)
     {
         // custom VIF
         n = (vib->vife[0] & 0x07);
-        snprintf(buff, sizeof(buff), "%s %s", mbus_unit_prefix(n-6), vib->custom_vif);
+        os_snprintf(buff, sizeof(buff), "%s %s", mbus_unit_prefix(n-6), vib->custom_vif);
         return buff;
     }
 
@@ -2414,7 +2415,7 @@ mbus_vib_unit_lookup(mbus_value_information_block *vib)
 // Source: MBDOC48.PDF
 //
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_record_decode(mbus_data_record *record)
 {
     static char buff[768];
@@ -2443,10 +2444,10 @@ mbus_data_record_decode(mbus_data_record *record)
 
                 mbus_data_int_decode(record->data, 1, &int_val);
 
-                snprintf(buff, sizeof(buff), "%d", int_val);
+                os_snprintf(buff, sizeof(buff), "%d", int_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 1 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 1 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2457,7 +2458,7 @@ mbus_data_record_decode(mbus_data_record *record)
                 if (vif == 0x6C)
                 {
                     mbus_data_tm_decode(&time, record->data, 2);
-                    snprintf(buff, sizeof(buff), "%04d-%02d-%02d",
+                    os_snprintf(buff, sizeof(buff), "%04d-%02d-%02d",
                                                  (time.tm_year + 1900),
                                                  (time.tm_mon + 1),
                                                   time.tm_mday);
@@ -2465,9 +2466,9 @@ mbus_data_record_decode(mbus_data_record *record)
                 else  // 2 byte integer
                 {
                     mbus_data_int_decode(record->data, 2, &int_val);
-                    snprintf(buff, sizeof(buff), "%d", int_val);
+                    os_snprintf(buff, sizeof(buff), "%d", int_val);
                     if (debug)
-                        printf("%s: DIF 0x%.2x was decoded using 2 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                        INFO_VAR("%s: DIF 0x%.2x was decoded using 2 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 }
 
@@ -2477,10 +2478,10 @@ mbus_data_record_decode(mbus_data_record *record)
 
                 mbus_data_int_decode(record->data, 3, &int_val);
 
-                snprintf(buff, sizeof(buff), "%d", int_val);
+                os_snprintf(buff, sizeof(buff), "%d", int_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 3 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 3 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2494,7 +2495,7 @@ mbus_data_record_decode(mbus_data_record *record)
                     ((record->drh.vib.vif == 0xFD) && (vife == 0x70)))
                 {
                     mbus_data_tm_decode(&time, record->data, 4);
-                    snprintf(buff, sizeof(buff), "%04d-%02d-%02dT%02d:%02d:%02d",
+                    os_snprintf(buff, sizeof(buff), "%04d-%02d-%02dT%02d:%02d:%02d",
                                                  (time.tm_year + 1900),
                                                  (time.tm_mon + 1),
                                                   time.tm_mday,
@@ -2505,11 +2506,11 @@ mbus_data_record_decode(mbus_data_record *record)
                 else  // 4 byte integer
                 {
                     mbus_data_int_decode(record->data, 4, &int_val);
-                    snprintf(buff, sizeof(buff), "%d", int_val);
+                    os_snprintf(buff, sizeof(buff), "%d", int_val);
                 }
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 4 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 4 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2517,10 +2518,10 @@ mbus_data_record_decode(mbus_data_record *record)
 
                 float_val = mbus_data_float_decode(record->data);
 
-                snprintf(buff, sizeof(buff), "%f", float_val);
+                os_snprintf(buff, sizeof(buff), "%f", float_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 4 byte Real\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 4 byte Real\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2534,7 +2535,7 @@ mbus_data_record_decode(mbus_data_record *record)
                     ((record->drh.vib.vif == 0xFD) && (vife == 0x70)))
                 {
                     mbus_data_tm_decode(&time, record->data, 6);
-                    snprintf(buff, sizeof(buff), "%04d-%02d-%02dT%02d:%02d:%02d",
+                    os_snprintf(buff, sizeof(buff), "%04d-%02d-%02dT%02d:%02d:%02d",
                                                  (time.tm_year + 1900),
                                                  (time.tm_mon + 1),
                                                   time.tm_mday,
@@ -2545,11 +2546,11 @@ mbus_data_record_decode(mbus_data_record *record)
                 else  // 6 byte integer
                 {
                     mbus_data_long_long_decode(record->data, 6, &long_long_val);
-                    snprintf(buff, sizeof(buff), "%lld", long_long_val);
+                    os_snprintf(buff, sizeof(buff), "%lld", long_long_val);
                 }
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 6 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 6 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2557,10 +2558,10 @@ mbus_data_record_decode(mbus_data_record *record)
 
                 mbus_data_long_long_decode(record->data, 8, &long_long_val);
 
-                snprintf(buff, sizeof(buff), "%lld", long_long_val);
+                os_snprintf(buff, sizeof(buff), "%lld", long_long_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 8 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 8 byte integer\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2569,50 +2570,50 @@ mbus_data_record_decode(mbus_data_record *record)
             case 0x09: // 2 digit BCD (8 bit)
 
                 int_val = (int)mbus_data_bcd_decode(record->data, 1);
-                snprintf(buff, sizeof(buff), "%d", int_val);
+                os_snprintf(buff, sizeof(buff), "%d", int_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 2 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 2 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
             case 0x0A: // 4 digit BCD (16 bit)
 
                 int_val = (int)mbus_data_bcd_decode(record->data, 2);
-                snprintf(buff, sizeof(buff), "%d", int_val);
+                os_snprintf(buff, sizeof(buff), "%d", int_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 4 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 4 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
             case 0x0B: // 6 digit BCD (24 bit)
 
                 int_val = (int)mbus_data_bcd_decode(record->data, 3);
-                snprintf(buff, sizeof(buff), "%d", int_val);
+                os_snprintf(buff, sizeof(buff), "%d", int_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 6 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 6 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
             case 0x0C: // 8 digit BCD (32 bit)
 
                 int_val = (int)mbus_data_bcd_decode(record->data, 4);
-                snprintf(buff, sizeof(buff), "%d", int_val);
+                os_snprintf(buff, sizeof(buff), "%d", int_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 8 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 8 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
             case 0x0E: // 12 digit BCD (48 bit)
 
                 long_long_val = mbus_data_bcd_decode(record->data, 6);
-                snprintf(buff, sizeof(buff), "%lld", long_long_val);
+                os_snprintf(buff, sizeof(buff), "%lld", long_long_val);
 
                 if (debug)
-                    printf("%s: DIF 0x%.2x was decoded using 12 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
+                    INFO_VAR("%s: DIF 0x%.2x was decoded using 12 digit BCD\n", __PRETTY_FUNCTION__, record->drh.dib.dif);
 
                 break;
 
@@ -2631,7 +2632,7 @@ mbus_data_record_decode(mbus_data_record *record)
 
             default:
 
-                snprintf(buff, sizeof(buff), "Unknown DIF (0x%.2x)", record->drh.dib.dif);
+                os_snprintf(buff, sizeof(buff), "Unknown DIF (0x%.2x)", record->drh.dib.dif);
                 break;
         }
 
@@ -2643,14 +2644,14 @@ mbus_data_record_decode(mbus_data_record *record)
 //------------------------------------------------------------------------------
 /// Return the unit description for a variable-length data record
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_record_unit(mbus_data_record *record)
 {
     static char buff[128];
 
     if (record)
     {
-        snprintf(buff, sizeof(buff), "%s", mbus_vib_unit_lookup(&(record->drh.vib)));
+        os_snprintf(buff, sizeof(buff), "%s", mbus_vib_unit_lookup(&(record->drh.vib)));
 
         return buff;
     }
@@ -2661,14 +2662,14 @@ mbus_data_record_unit(mbus_data_record *record)
 //------------------------------------------------------------------------------
 /// Return the value for a variable-length data record
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_record_value(mbus_data_record *record)
 {
     static char buff[768];
 
     if (record)
     {
-        snprintf(buff, sizeof(buff), "%s", mbus_data_record_decode(record));
+        os_snprintf(buff, sizeof(buff), "%s", mbus_data_record_decode(record));
 
         return buff;
     }
@@ -2679,7 +2680,7 @@ mbus_data_record_value(mbus_data_record *record)
 //------------------------------------------------------------------------------
 /// Return the storage number for a variable-length data record
 //------------------------------------------------------------------------------
-long mbus_data_record_storage_number(mbus_data_record *record)
+long ICACHE_FLASH_ATTR mbus_data_record_storage_number(mbus_data_record *record)
 {
     int bit_index = 0;
     long result = 0;
@@ -2728,7 +2729,7 @@ long mbus_data_record_tariff(mbus_data_record *record)
 //------------------------------------------------------------------------------
 /// Return device unit for a variable-length data record
 //------------------------------------------------------------------------------
-int mbus_data_record_device(mbus_data_record *record)
+int ICACHE_FLASH_ATTR mbus_data_record_device(mbus_data_record *record)
 {
     int bit_index = 0;
     int result = 0;
@@ -2751,7 +2752,7 @@ int mbus_data_record_device(mbus_data_record *record)
 //------------------------------------------------------------------------------
 /// Return a string containing the function description
 //------------------------------------------------------------------------------
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_record_function(mbus_data_record *record)
 {
     static char buff[128];
@@ -2761,23 +2762,23 @@ mbus_data_record_function(mbus_data_record *record)
         switch (record->drh.dib.dif & MBUS_DATA_RECORD_DIF_MASK_FUNCTION)
         {
             case 0x00:
-                snprintf(buff, sizeof(buff), "Instantaneous value");
+                os_snprintf(buff, sizeof(buff), "Instantaneous value");
                 break;
 
             case 0x10:
-                snprintf(buff, sizeof(buff), "Maximum value");
+                os_snprintf(buff, sizeof(buff), "Maximum value");
                 break;
 
             case 0x20:
-                snprintf(buff, sizeof(buff), "Minimum value");
+                os_snprintf(buff, sizeof(buff), "Minimum value");
                 break;
 
             case 0x30:
-                snprintf(buff, sizeof(buff), "Value during error state");
+                os_snprintf(buff, sizeof(buff), "Value during error state");
                 break;
 
             default:
-                snprintf(buff, sizeof(buff), "unknown");
+                os_snprintf(buff, sizeof(buff), "unknown");
         }
 
         return buff;
@@ -2790,12 +2791,12 @@ mbus_data_record_function(mbus_data_record *record)
 ///
 /// For fixed-length frames, return a string describing the type of value (stored or actual)
 ///
-const char *
+const char * ICACHE_FLASH_ATTR 
 mbus_data_fixed_function(int status)
 {
     static char buff[128];
 
-    snprintf(buff, sizeof(buff), "%s",
+    os_snprintf(buff, sizeof(buff), "%s",
             (status & MBUS_DATA_FIXED_STATUS_DATE_MASK) == MBUS_DATA_FIXED_STATUS_DATE_STORED ?
             "Stored value" : "Actual value" );
 
@@ -2811,7 +2812,7 @@ mbus_data_fixed_function(int status)
 //------------------------------------------------------------------------------
 /// PARSE M-BUS frame data structures from binary data.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 {
     size_t i, len;
@@ -2821,18 +2822,18 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
         frame->next = NULL;
 
         if (parse_debug)
-            printf("%s: Attempting to parse binary data [size = %zu]\n", __PRETTY_FUNCTION__, data_size);
+            INFO_VAR("%s: Attempting to parse binary data [size = %zu]\n", __PRETTY_FUNCTION__, data_size);
 
         if (parse_debug)
-            printf("%s: ", __PRETTY_FUNCTION__);
+            INFO_VAR("%s: ", __PRETTY_FUNCTION__);
 
         for (i = 0; i < data_size && parse_debug; i++)
         {
-            printf("%.2X ", data[i] & 0xFF);
+            INFO_VAR("%.2X ", data[i] & 0xFF);
         }
 
         if (parse_debug)
-            printf("\n%s: done.\n", __PRETTY_FUNCTION__);
+            INFO_VAR("\n%s: done.\n", __PRETTY_FUNCTION__);
 
         switch (data[0])
         {
@@ -2854,7 +2855,7 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 
                 if (data_size != MBUS_FRAME_BASE_SIZE_SHORT)
                 {
-                    snprintf(error_str, sizeof(error_str), "Too much data in frame.");
+                    os_snprintf(error_str, sizeof(error_str), "Too much data in frame.");
 
                     // too much data... ?
                     return -2;
@@ -2894,7 +2895,7 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 
                 if (frame->length1 < 3)
                 {
-                    snprintf(error_str, sizeof(error_str), "Invalid M-Bus frame length.");
+                    os_snprintf(error_str, sizeof(error_str), "Invalid M-Bus frame length.");
 
                     // not a valid M-bus frame
                     return -2;
@@ -2902,7 +2903,7 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 
                 if (frame->length1 != frame->length2)
                 {
-                    snprintf(error_str, sizeof(error_str), "Invalid M-Bus frame length.");
+                    os_snprintf(error_str, sizeof(error_str), "Invalid M-Bus frame length.");
 
                     // not a valid M-bus frame
                     return -2;
@@ -2919,7 +2920,7 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 
                 if (data_size > (size_t)(MBUS_FRAME_FIXED_SIZE_LONG + len))
                 {
-                    snprintf(error_str, sizeof(error_str), "Too much data in frame.");
+                    os_snprintf(error_str, sizeof(error_str), "Too much data in frame.");
 
                     // too much data... ?
                     return -2;
@@ -2958,7 +2959,7 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
                 // successfully parsed data
                 return 0;
             default:
-                snprintf(error_str, sizeof(error_str), "Invalid M-Bus frame start.");
+                os_snprintf(error_str, sizeof(error_str), "Invalid M-Bus frame start.");
 
                 // not a valid M-Bus frame header (start byte)
                 return -4;
@@ -2966,7 +2967,7 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 
     }
 
-    snprintf(error_str, sizeof(error_str), "Got null pointer to frame, data or zero data_size.");
+    os_snprintf(error_str, sizeof(error_str), "Got null pointer to frame, data or zero data_size.");
 
     return -1;
 }
@@ -2975,14 +2976,14 @@ mbus_parse(mbus_frame *frame, unsigned char *data, size_t data_size)
 //------------------------------------------------------------------------------
 /// Parse the fixed-length data of a M-Bus frame
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_fixed_parse(mbus_frame *frame, mbus_data_fixed *data)
 {
     if (frame && data)
     {
         if (frame->data_size != MBUS_DATA_FIXED_LENGTH)
         {
-            snprintf(error_str, sizeof(error_str), "Invalid length for fixed data.");
+            os_snprintf(error_str, sizeof(error_str), "Invalid length for fixed data.");
             return -1;
         }
 
@@ -3014,7 +3015,7 @@ mbus_data_fixed_parse(mbus_frame *frame, mbus_data_fixed *data)
 //------------------------------------------------------------------------------
 /// Parse the variable-length data of a M-Bus frame
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
 {
     mbus_data_record *record = NULL;
@@ -3029,7 +3030,7 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
 
         if(frame->data_size < i)
         {
-            snprintf(error_str, sizeof(error_str), "Variable header too short.");
+            os_snprintf(error_str, sizeof(error_str), "Variable header too short.");
             return -1;
         }
 
@@ -3107,7 +3108,7 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
                 if (record->drh.dib.ndife >= NITEMS(record->drh.dib.dife))
                 {
                     mbus_data_record_free(record);
-                    snprintf(error_str, sizeof(error_str), "Too many DIFE.");
+                    os_snprintf(error_str, sizeof(error_str), "Too many DIFE.");
                     return -1;
                 }
 
@@ -3122,7 +3123,7 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
             if (i > frame->data_size)
             {
                 mbus_data_record_free(record);
-                snprintf(error_str, sizeof(error_str), "Premature end of record at DIF.");
+                os_snprintf(error_str, sizeof(error_str), "Premature end of record at DIF.");
                 return -1;
             }
 
@@ -3139,14 +3140,14 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
                 if (var_vif_len > sizeof(record->drh.vib.custom_vif))
                 {
                     mbus_data_record_free(record);
-                    snprintf(error_str, sizeof(error_str), "Too long variable length VIF.");
+                    os_snprintf(error_str, sizeof(error_str), "Too long variable length VIF.");
                     return -1;
                 }
 
                 if (i + var_vif_len > frame->data_size)
                 {
                     mbus_data_record_free(record);
-                    snprintf(error_str, sizeof(error_str), "Premature end of record at variable length VIF.");
+                    os_snprintf(error_str, sizeof(error_str), "Premature end of record at variable length VIF.");
                     return -1;
                 }
                 mbus_data_str_decode(record->drh.vib.custom_vif, &(frame->data[i]), var_vif_len);
@@ -3169,7 +3170,7 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
                     if (record->drh.vib.nvife >= NITEMS(record->drh.vib.vife))
                     {
                         mbus_data_record_free(record);
-                        snprintf(error_str, sizeof(error_str), "Too many VIFE.");
+                        os_snprintf(error_str, sizeof(error_str), "Too many VIFE.");
                         return -1;
                     }
 
@@ -3185,7 +3186,7 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
             if (i > frame->data_size)
             {
                 mbus_data_record_free(record);
-                snprintf(error_str, sizeof(error_str), "Premature end of record at VIF.");
+                os_snprintf(error_str, sizeof(error_str), "Premature end of record at VIF.");
                 return -1;
             }
 
@@ -3207,7 +3208,7 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
             if (i + record->data_len > frame->data_size)
             {
                 mbus_data_record_free(record);
-                snprintf(error_str, sizeof(error_str), "Premature end of record at data.");
+                os_snprintf(error_str, sizeof(error_str), "Premature end of record at data.");
                 return -1;
             }
 
@@ -3232,20 +3233,20 @@ mbus_data_variable_parse(mbus_frame *frame, mbus_data_variable *data)
 /// Check the stype of the frame data (error, fixed or variable) and dispatch to the
 /// corresponding parser function.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_data_parse(mbus_frame *frame, mbus_frame_data *data)
 {
     char direction;
 
     if (frame == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "Got null pointer to frame.");
+        os_snprintf(error_str, sizeof(error_str), "Got null pointer to frame.");
         return -1;
     }
 
     if (data == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "Got null pointer to data.");
+        os_snprintf(error_str, sizeof(error_str), "Got null pointer to data.");
         return -1;
     }
 
@@ -3272,7 +3273,7 @@ mbus_frame_data_parse(mbus_frame *frame, mbus_frame_data *data)
         {
             if (frame->data_size == 0)
             {
-                snprintf(error_str, sizeof(error_str), "Got zero data_size.");
+                os_snprintf(error_str, sizeof(error_str), "Got zero data_size.");
 
                 return -1;
             }
@@ -3284,7 +3285,7 @@ mbus_frame_data_parse(mbus_frame *frame, mbus_frame_data *data)
         {
             if (frame->data_size == 0)
             {
-                snprintf(error_str, sizeof(error_str), "Got zero data_size.");
+                os_snprintf(error_str, sizeof(error_str), "Got zero data_size.");
 
                 return -1;
             }
@@ -3294,13 +3295,13 @@ mbus_frame_data_parse(mbus_frame *frame, mbus_frame_data *data)
         }
         else
         {
-            snprintf(error_str, sizeof(error_str), "Unknown control information 0x%.2x", frame->control_information);
+            os_snprintf(error_str, sizeof(error_str), "Unknown control information 0x%.2x", frame->control_information);
 
             return -1;
         }
     }
 
-    snprintf(error_str, sizeof(error_str), "Wrong direction in frame (master to slave)");
+    os_snprintf(error_str, sizeof(error_str), "Wrong direction in frame (master to slave)");
 
     return -1;
 }
@@ -3310,7 +3311,7 @@ mbus_frame_data_parse(mbus_frame *frame, mbus_frame_data *data)
 /// on the bus. The binary packet format is different for the different types
 /// of M-bus frames.
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_pack(mbus_frame *frame, unsigned char *data, size_t data_size)
 {
     size_t i, offset = 0;
@@ -3414,7 +3415,7 @@ mbus_frame_pack(mbus_frame *frame, unsigned char *data, size_t data_size)
 //------------------------------------------------------------------------------
 /// pack the data stuctures into frame->data
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_internal_pack(mbus_frame *frame, mbus_frame_data *frame_data)
 {
     mbus_data_record *record;
@@ -3482,7 +3483,7 @@ mbus_frame_internal_pack(mbus_frame *frame, mbus_frame_data *frame_data)
             {
                 // pack DIF
                 if (parse_debug)
-                    printf("%s: packing DIF [%zu]", __PRETTY_FUNCTION__, frame->data_size);
+                    INFO_VAR("%s: packing DIF [%zu]", __PRETTY_FUNCTION__, frame->data_size);
                 frame->data[frame->data_size++] = record->drh.dib.dif;
                 for (j = 0; j < record->drh.dib.ndife; j++)
                 {
@@ -3491,7 +3492,7 @@ mbus_frame_internal_pack(mbus_frame *frame, mbus_frame_data *frame_data)
 
                 // pack VIF
                 if (parse_debug)
-                    printf("%s: packing VIF [%zu]", __PRETTY_FUNCTION__, frame->data_size);
+                    INFO_VAR("%s: packing VIF [%zu]", __PRETTY_FUNCTION__, frame->data_size);
                 frame->data[frame->data_size++] = record->drh.vib.vif;
                 for (j = 0; j < record->drh.vib.nvife; j++)
                 {
@@ -3500,7 +3501,7 @@ mbus_frame_internal_pack(mbus_frame *frame, mbus_frame_data *frame_data)
 
                 // pack data
                 if (parse_debug)
-                    printf("%s: packing data [%zu : %zu]", __PRETTY_FUNCTION__, frame->data_size, record->data_len);
+                    INFO_VAR("%s: packing data [%zu : %zu]", __PRETTY_FUNCTION__, frame->data_size, record->data_len);
                 for (j = 0; j < record->data_len; j++)
                 {
                     frame->data[frame->data_size++] = record->data[j];
@@ -3525,7 +3526,7 @@ mbus_frame_internal_pack(mbus_frame *frame, mbus_frame_data *frame_data)
 //------------------------------------------------------------------------------
 /// Switch parse debugging
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_parse_set_debug(int debug)
 {
     parse_debug = debug;
@@ -3534,7 +3535,7 @@ mbus_parse_set_debug(int debug)
 //------------------------------------------------------------------------------
 /// Dump frame in HEX on standard output
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_print(mbus_frame *frame)
 {
     mbus_frame *iter;
@@ -3551,12 +3552,12 @@ mbus_frame_print(mbus_frame *frame)
             return -2;
         }
 
-        printf("%s: Dumping M-Bus frame [type %d, %d bytes]: ", __PRETTY_FUNCTION__, iter->type, len);
+        INFO_VAR("%s: Dumping M-Bus frame [type %d, %d bytes]: ", __PRETTY_FUNCTION__, iter->type, len);
         for (i = 0; i < len; i++)
         {
-            printf("%.2X ", data_buff[i]);
+            INFO_VAR("%.2X ", data_buff[i]);
         }
-        printf("\n");
+        INFO_VAR("\n");
     }
 
     return 0;
@@ -3567,7 +3568,7 @@ mbus_frame_print(mbus_frame *frame)
 /// Print the data part of a frame.
 ///
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_data_print(mbus_frame_data *data)
 {
     if (data)
@@ -3594,25 +3595,25 @@ mbus_frame_data_print(mbus_frame_data *data)
 //------------------------------------------------------------------------------
 /// Print M-bus frame info to stdout
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_variable_header_print(mbus_data_variable_header *header)
 {
     if (header)
     {
-        printf("%s: ID           = %lld\n", __PRETTY_FUNCTION__,
+        INFO_VAR("%s: ID           = %lld\n", __PRETTY_FUNCTION__,
                mbus_data_bcd_decode(header->id_bcd, 4));
 
-        printf("%s: Manufacturer = 0x%.2X%.2X\n", __PRETTY_FUNCTION__,
+        INFO_VAR("%s: Manufacturer = 0x%.2X%.2X\n", __PRETTY_FUNCTION__,
                header->manufacturer[1], header->manufacturer[0]);
 
-        printf("%s: Manufacturer = %s\n", __PRETTY_FUNCTION__,
+        INFO_VAR("%s: Manufacturer = %s\n", __PRETTY_FUNCTION__,
                mbus_decode_manufacturer(header->manufacturer[0], header->manufacturer[1]));
 
-        printf("%s: Version      = 0x%.2X\n", __PRETTY_FUNCTION__, header->version);
-        printf("%s: Medium       = %s (0x%.2X)\n", __PRETTY_FUNCTION__, mbus_data_variable_medium_lookup(header->medium), header->medium);
-        printf("%s: Access #     = 0x%.2X\n", __PRETTY_FUNCTION__, header->access_no);
-        printf("%s: Status       = 0x%.2X\n", __PRETTY_FUNCTION__, header->status);
-        printf("%s: Signature    = 0x%.2X%.2X\n", __PRETTY_FUNCTION__,
+        INFO_VAR("%s: Version      = 0x%.2X\n", __PRETTY_FUNCTION__, header->version);
+        INFO_VAR("%s: Medium       = %s (0x%.2X)\n", __PRETTY_FUNCTION__, mbus_data_variable_medium_lookup(header->medium), header->medium);
+        INFO_VAR("%s: Access #     = 0x%.2X\n", __PRETTY_FUNCTION__, header->access_no);
+        INFO_VAR("%s: Status       = 0x%.2X\n", __PRETTY_FUNCTION__, header->status);
+        INFO_VAR("%s: Signature    = 0x%.2X%.2X\n", __PRETTY_FUNCTION__,
                header->signature[1], header->signature[0]);
 
     }
@@ -3620,7 +3621,7 @@ mbus_data_variable_header_print(mbus_data_variable_header *header)
     return -1;
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_variable_print(mbus_data_variable *data)
 {
     mbus_data_record *record;
@@ -3633,136 +3634,129 @@ mbus_data_variable_print(mbus_data_variable *data)
         for (record = data->record; record; record = record->next)
         {
             // DIF
-            printf("DIF               = %.2X\n", record->drh.dib.dif);
-            printf("DIF.Extension     = %s\n",  (record->drh.dib.dif & MBUS_DIB_DIF_EXTENSION_BIT) ? "Yes":"No");
-            printf("DIF.StorageNumber = %d\n",  (record->drh.dib.dif & MBUS_DATA_RECORD_DIF_MASK_STORAGE_NO) >> 6);
-            printf("DIF.Function      = %s\n",  (record->drh.dib.dif & 0x30) ? "Minimum value" : "Instantaneous value" );
-            printf("DIF.Data          = %.2X\n", record->drh.dib.dif & 0x0F);
+            INFO_VAR("DIF               = %.2X\n", record->drh.dib.dif);
+            INFO_VAR("DIF.Extension     = %s\n",  (record->drh.dib.dif & MBUS_DIB_DIF_EXTENSION_BIT) ? "Yes":"No");
+            INFO_VAR("DIF.StorageNumber = %d\n",  (record->drh.dib.dif & MBUS_DATA_RECORD_DIF_MASK_STORAGE_NO) >> 6);
+            INFO_VAR("DIF.Function      = %s\n",  (record->drh.dib.dif & 0x30) ? "Minimum value" : "Instantaneous value" );
+            INFO_VAR("DIF.Data          = %.2X\n", record->drh.dib.dif & 0x0F);
 
             // VENDOR SPECIFIC
             if ((record->drh.dib.dif == MBUS_DIB_DIF_MANUFACTURER_SPECIFIC) ||
                 (record->drh.dib.dif == MBUS_DIB_DIF_MORE_RECORDS_FOLLOW)) //MBUS_DIB_DIF_VENDOR_SPECIFIC
             {
-                printf("%s: VENDOR DATA [size=%zu] = ", __PRETTY_FUNCTION__, record->data_len);
+                INFO_VAR("%s: VENDOR DATA [size=%zu] = ", __PRETTY_FUNCTION__, record->data_len);
                 for (j = 0; j < record->data_len; j++)
                 {
-                    printf("%.2X ", record->data[j]);
+                    INFO_VAR("%.2X ", record->data[j]);
                 }
-                printf("\n");
+                INFO_VAR("\n");
 
                 if (record->drh.dib.dif == MBUS_DIB_DIF_MORE_RECORDS_FOLLOW)
                 {
-                  printf("%s: More records follow in next telegram\n", __PRETTY_FUNCTION__);
+                  INFO_VAR("%s: More records follow in next telegram\n", __PRETTY_FUNCTION__);
                 }
                 continue;
             }
 
             // calculate length of data record
-            printf("DATA LENGTH = %zu\n", record->data_len);
+            INFO_VAR("DATA LENGTH = %zu\n", record->data_len);
 
             // DIFE
             for (j = 0; j < record->drh.dib.ndife; j++)
             {
                 unsigned char dife = record->drh.dib.dife[j];
 
-                printf("DIFE[%zu]               = %.2X\n", j,  dife);
-                printf("DIFE[%zu].Extension     = %s\n",   j, (dife & MBUS_DATA_RECORD_DIFE_MASK_EXTENSION) ? "Yes" : "No");
-                printf("DIFE[%zu].Device        = %d\n",   j, (dife & MBUS_DATA_RECORD_DIFE_MASK_DEVICE) >> 6 );
-                printf("DIFE[%zu].Tariff        = %d\n",   j, (dife & MBUS_DATA_RECORD_DIFE_MASK_TARIFF) >> 4 );
-                printf("DIFE[%zu].StorageNumber = %.2X\n", j,  dife & MBUS_DATA_RECORD_DIFE_MASK_STORAGE_NO);
+                INFO_VAR("DIFE[%zu]               = %.2X\n", j,  dife);
+                INFO_VAR("DIFE[%zu].Extension     = %s\n",   j, (dife & MBUS_DATA_RECORD_DIFE_MASK_EXTENSION) ? "Yes" : "No");
+                INFO_VAR("DIFE[%zu].Device        = %d\n",   j, (dife & MBUS_DATA_RECORD_DIFE_MASK_DEVICE) >> 6 );
+                INFO_VAR("DIFE[%zu].Tariff        = %d\n",   j, (dife & MBUS_DATA_RECORD_DIFE_MASK_TARIFF) >> 4 );
+                INFO_VAR("DIFE[%zu].StorageNumber = %.2X\n", j,  dife & MBUS_DATA_RECORD_DIFE_MASK_STORAGE_NO);
             }
 
             // VIF
-            printf("VIF           = %.2X\n", record->drh.vib.vif);
-            printf("VIF.Extension = %s\n",  (record->drh.vib.vif & MBUS_DIB_VIF_EXTENSION_BIT) ? "Yes":"No");
-            printf("VIF.Value     = %.2X\n", record->drh.vib.vif & MBUS_DIB_VIF_WITHOUT_EXTENSION);
+            INFO_VAR("VIF           = %.2X\n", record->drh.vib.vif);
+            INFO_VAR("VIF.Extension = %s\n",  (record->drh.vib.vif & MBUS_DIB_VIF_EXTENSION_BIT) ? "Yes":"No");
+            INFO_VAR("VIF.Value     = %.2X\n", record->drh.vib.vif & MBUS_DIB_VIF_WITHOUT_EXTENSION);
 
             // VIFE
             for (j = 0; j < record->drh.vib.nvife; j++)
             {
                 unsigned char vife = record->drh.vib.vife[j];
 
-                printf("VIFE[%zu]           = %.2X\n", j,  vife);
-                printf("VIFE[%zu].Extension = %s\n",   j, (vife & MBUS_DIB_VIF_EXTENSION_BIT) ? "Yes" : "No");
-                printf("VIFE[%zu].Value     = %.2X\n", j,  vife & MBUS_DIB_VIF_WITHOUT_EXTENSION);
+                INFO_VAR("VIFE[%zu]           = %.2X\n", j,  vife);
+                INFO_VAR("VIFE[%zu].Extension = %s\n",   j, (vife & MBUS_DIB_VIF_EXTENSION_BIT) ? "Yes" : "No");
+                INFO_VAR("VIFE[%zu].Value     = %.2X\n", j,  vife & MBUS_DIB_VIF_WITHOUT_EXTENSION);
             }
 
-            printf("\n");
+            INFO_VAR("\n");
         }
     }
 
     return -1;
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_fixed_print(mbus_data_fixed *data)
 {
     int val;
 
     if (data)
     {
-        printf("%s: ID       = %lld\n", __PRETTY_FUNCTION__, mbus_data_bcd_decode(data->id_bcd, 4));
-        printf("%s: Access # = 0x%.2X\n", __PRETTY_FUNCTION__, data->tx_cnt);
-        printf("%s: Status   = 0x%.2X\n", __PRETTY_FUNCTION__, data->status);
-        printf("%s: Function = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_function(data->status));
+        INFO_VAR("%s: ID       = %lld\n", __PRETTY_FUNCTION__, mbus_data_bcd_decode(data->id_bcd, 4));
+        INFO_VAR("%s: Access # = 0x%.2X\n", __PRETTY_FUNCTION__, data->tx_cnt);
+        INFO_VAR("%s: Status   = 0x%.2X\n", __PRETTY_FUNCTION__, data->status);
+        INFO_VAR("%s: Function = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_function(data->status));
 
-        printf("%s: Medium1  = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_medium(data));
-        printf("%s: Unit1    = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_unit(data->cnt1_type));
+        INFO_VAR("%s: Medium1  = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_medium(data));
+        INFO_VAR("%s: Unit1    = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_unit(data->cnt1_type));
         if ((data->status & MBUS_DATA_FIXED_STATUS_FORMAT_MASK) == MBUS_DATA_FIXED_STATUS_FORMAT_BCD)
         {
-            printf("%s: Counter1 = %lld\n", __PRETTY_FUNCTION__, mbus_data_bcd_decode(data->cnt1_val, 4));
+            INFO_VAR("%s: Counter1 = %lld\n", __PRETTY_FUNCTION__, mbus_data_bcd_decode(data->cnt1_val, 4));
         }
         else
         {
             mbus_data_int_decode(data->cnt1_val, 4, &val);
-            printf("%s: Counter1 = %d\n", __PRETTY_FUNCTION__, val);
+            INFO_VAR("%s: Counter1 = %d\n", __PRETTY_FUNCTION__, val);
         }
 
-        printf("%s: Medium2  = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_medium(data));
-        printf("%s: Unit2    = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_unit(data->cnt2_type));
+        INFO_VAR("%s: Medium2  = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_medium(data));
+        INFO_VAR("%s: Unit2    = %s\n", __PRETTY_FUNCTION__, mbus_data_fixed_unit(data->cnt2_type));
         if ((data->status & MBUS_DATA_FIXED_STATUS_FORMAT_MASK) == MBUS_DATA_FIXED_STATUS_FORMAT_BCD)
         {
-            printf("%s: Counter2 = %lld\n", __PRETTY_FUNCTION__, mbus_data_bcd_decode(data->cnt2_val, 4));
+            INFO_VAR("%s: Counter2 = %lld\n", __PRETTY_FUNCTION__, mbus_data_bcd_decode(data->cnt2_val, 4));
         }
         else
         {
             mbus_data_int_decode(data->cnt2_val, 4, &val);
-            printf("%s: Counter2 = %d\n", __PRETTY_FUNCTION__, val);
+            INFO_VAR("%s: Counter2 = %d\n", __PRETTY_FUNCTION__, val);
         }
     }
 
     return -1;
 }
 
-void
+void ICACHE_FLASH_ATTR 
 mbus_hex_dump(const char *label, const char *buff, size_t len)
 {
-    time_t rawtime;
-    struct tm * timeinfo;
-    char timestamp[21];
     size_t i;
 
     if (label == NULL || buff == NULL)
         return;
 
-    time ( &rawtime );
-    timeinfo = gmtime ( &rawtime );
-
-    strftime(timestamp,20,"%Y-%m-%d %H:%M:%S",timeinfo);
-    fprintf(stderr, "[%s] %s (%03zu):", timestamp, label, len);
+    ERROR_VAR("%s (%03zu):", label, len);
 
     for (i = 0; i < len; i++)
     {
-       fprintf(stderr, " %02X", (unsigned char) buff[i]);
+       ERROR_VAR(" %02X", (unsigned char) buff[i]);
     }
 
-    fprintf(stderr, "\n");
+    ERROR_VAR("\n");
 }
 
-int
+int ICACHE_FLASH_ATTR 
 mbus_data_error_print(int error)
 {
-    printf("%s: Error = %d\n", __PRETTY_FUNCTION__, error);
+    INFO_VAR("%s: Error = %d\n", __PRETTY_FUNCTION__, error);
 
     return -1;
 }
@@ -3778,7 +3772,7 @@ mbus_data_error_print(int error)
 /// Encode string to XML
 ///
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_str_xml_encode(unsigned char *dst, const unsigned char *src, size_t max_len)
 {
     size_t i, len;
@@ -3814,16 +3808,16 @@ mbus_str_xml_encode(unsigned char *dst, const unsigned char *src, size_t max_len
             switch (src[i])
             {
                 case '&':
-                    len += snprintf(&dst[len], max_len - len, "&amp;");
+                    len += os_snprintf(dst+len, max_len - len, "&amp;");
                     break;
                 case '<':
-                    len += snprintf(&dst[len], max_len - len, "&lt;");
+                    len += os_snprintf(dst+len, max_len - len, "&lt;");
                     break;
                 case '>':
-                    len += snprintf(&dst[len], max_len - len, "&gt;");
+                    len += os_snprintf(dst+len, max_len - len, "&gt;");
                     break;
                 case '"':
-                    len += snprintf(&dst[len], max_len - len, "&quot;");
+                    len += os_snprintf(dst+len, max_len - len, "&quot;");
                     break;
                 default:
                     dst[len++] = src[i];
@@ -3841,48 +3835,50 @@ mbus_str_xml_encode(unsigned char *dst, const unsigned char *src, size_t max_len
 //------------------------------------------------------------------------------
 /// Generate XML for the variable-length data header
 //------------------------------------------------------------------------------
-char *
-mbus_data_variable_header_xml(mbus_data_variable_header *header)
+void ICACHE_FLASH_ATTR 
+mbus_data_variable_header_xml(mbus_data_variable_header *header, char *buff, size_t buff_len)
 {
-    static char buff[8192];
     char str_encoded[768];
     size_t len = 0;
-
+    
     if (header)
     {
-        len += snprintf(&buff[len], sizeof(buff) - len, "    <SlaveInformation>\n");
+        len += os_snprintf(buff+len, buff_len - len, "    <SlaveInformation>\n");
 
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Id>%lld</Id>\n", mbus_data_bcd_decode(header->id_bcd, 4));
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Manufacturer>%s</Manufacturer>\n",
+        len += os_snprintf(buff+len, buff_len - len, "        <Id>%lld</Id>\n", mbus_data_bcd_decode(header->id_bcd, 4));
+        len += os_snprintf(buff+len, buff_len - len, "        <Manufacturer>%s</Manufacturer>\n",
                 mbus_decode_manufacturer(header->manufacturer[0], header->manufacturer[1]));
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Version>%d</Version>\n", header->version);
+        len += os_snprintf(buff+len, buff_len - len, "        <Version>%d</Version>\n", header->version);
 
         mbus_str_xml_encode(str_encoded, mbus_data_product_name(header), sizeof(str_encoded));
 
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <ProductName>%s</ProductName>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_len - len, "        <ProductName>%s</ProductName>\n", str_encoded);
 
         mbus_str_xml_encode(str_encoded, mbus_data_variable_medium_lookup(header->medium), sizeof(str_encoded));
 
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Medium>%s</Medium>\n", str_encoded);
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <AccessNumber>%d</AccessNumber>\n", header->access_no);
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Status>%.2X</Status>\n", header->status);
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Signature>%.2X%.2X</Signature>\n", header->signature[1], header->signature[0]);
+        len += os_snprintf(buff+len, buff_len - len, "        <Medium>%s</Medium>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_len - len, "        <AccessNumber>%d</AccessNumber>\n", header->access_no);
+        len += os_snprintf(buff+len, buff_len - len, "        <Status>%.2X</Status>\n", header->status);
+        len += os_snprintf(buff+len, buff_len - len, "        <Signature>%.2X%.2X</Signature>\n", header->signature[1], header->signature[0]);
 
-        len += snprintf(&buff[len], sizeof(buff) - len, "    </SlaveInformation>\n\n");
+        len += os_snprintf(buff+len, buff_len - len, "    </SlaveInformation>\n\n");
 
-        return buff;
+        return;
+    }
+    else
+    {
+      buff[0] = 0;
     }
 
-    return "";
+    return;
 }
 
 //------------------------------------------------------------------------------
 /// Generate XML for a single variable-length data record
 //------------------------------------------------------------------------------
-char *
-mbus_data_variable_record_xml(mbus_data_record *record, int record_cnt, int frame_cnt, mbus_data_variable_header *header)
+void ICACHE_FLASH_ATTR 
+mbus_data_variable_record_xml(mbus_data_record *record, int record_cnt, int frame_cnt, mbus_data_variable_header *header, char *buff, size_t buff_len)
 {
-    static char buff[8192];
     char str_encoded[768];
     size_t len = 0;
     struct tm * timeinfo;
@@ -3893,78 +3889,87 @@ mbus_data_variable_record_xml(mbus_data_record *record, int record_cnt, int fram
     {
         if (frame_cnt >= 0)
         {
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "    <DataRecord id=\"%d\" frame=\"%d\">\n",
                             record_cnt, frame_cnt);
         }
         else
         {
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "    <DataRecord id=\"%d\">\n", record_cnt);
         }
 
         if (record->drh.dib.dif == MBUS_DIB_DIF_MANUFACTURER_SPECIFIC) // MBUS_DIB_DIF_VENDOR_SPECIFIC
         {
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "        <Function>Manufacturer specific</Function>\n");
         }
         else if (record->drh.dib.dif == MBUS_DIB_DIF_MORE_RECORDS_FOLLOW)
         {
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "        <Function>More records follow</Function>\n");
         }
         else
         {
             mbus_str_xml_encode(str_encoded, mbus_data_record_function(record), sizeof(str_encoded));
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "        <Function>%s</Function>\n", str_encoded);
 
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "        <StorageNumber>%ld</StorageNumber>\n",
                             mbus_data_record_storage_number(record));
 
             if ((tariff = mbus_data_record_tariff(record)) >= 0)
             {
-                len += snprintf(&buff[len], sizeof(buff) - len, "        <Tariff>%ld</Tariff>\n",
+                len += os_snprintf(buff+len, buff_len - len, "        <Tariff>%ld</Tariff>\n",
                                 tariff);
-                len += snprintf(&buff[len], sizeof(buff) - len, "        <Device>%d</Device>\n",
+                len += os_snprintf(buff+len, buff_len - len, "        <Device>%d</Device>\n",
                                 mbus_data_record_device(record));
             }
 
             mbus_str_xml_encode(str_encoded, mbus_data_record_unit(record), sizeof(str_encoded));
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "        <Unit>%s</Unit>\n", str_encoded);
         }
 
         mbus_str_xml_encode(str_encoded, mbus_data_record_value(record), sizeof(str_encoded));
-        len += snprintf(&buff[len], sizeof(buff) - len, "        <Value>%s</Value>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_len - len, "        <Value>%s</Value>\n", str_encoded);
 
         if (record->timestamp > 0)
         {
+#if 0
             timeinfo = gmtime (&(record->timestamp));
             strftime(timestamp,20,"%Y-%m-%dT%H:%M:%S",timeinfo);
-            len += snprintf(&buff[len], sizeof(buff) - len,
+            len += os_snprintf(buff+len, buff_len - len,
                             "        <Timestamp>%s</Timestamp>\n", timestamp);
+#endif
+            len += os_snprintf(buff+len, buff_len - len,
+                            "        <Timestamp>%s</Timestamp>\n", record->timestamp);
         }
 
-        len += snprintf(&buff[len], sizeof(buff) - len, "    </DataRecord>\n\n");
+        len += os_snprintf(buff+len, buff_len - len, "    </DataRecord>\n\n");
 
-        return buff;
+        return;
+    }
+    else
+    {
+      buff[0] = 0;
     }
 
-    return "";
+    return;
 }
 
 //------------------------------------------------------------------------------
 /// Generate XML for variable-length data
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_data_variable_xml(mbus_data_variable *data)
 {
     mbus_data_record *record;
     char *buff = NULL, *new_buff;
     size_t len = 0, buff_size = 8192;
     int i;
+    char var_hdr[1024];
 
     if (data)
     {
@@ -3973,33 +3978,33 @@ mbus_data_variable_xml(mbus_data_variable *data)
         if (buff == NULL)
             return NULL;
 
-        len += snprintf(&buff[len], buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
+        len += os_snprintf(buff+len, buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
 
-        len += snprintf(&buff[len], buff_size - len, "<MBusData>\n\n");
+        len += os_snprintf(buff+len, buff_size - len, "<MBusData>\n\n");
 
-        len += snprintf(&buff[len], buff_size - len, "%s",
-                        mbus_data_variable_header_xml(&(data->header)));
+        mbus_data_variable_header_xml(&(data->header), var_hdr, 1024);
+        len += os_snprintf(buff+len, buff_size - len, "%s", var_hdr);
 
         for (record = data->record, i = 0; record; record = record->next, i++)
         {
             if ((buff_size - len) < 1024)
             {
-                buff_size *= 2;
-                new_buff = (char*) realloc(buff,buff_size);
-
+                new_buff = (char *)malloc(buff_size*2);
                 if (new_buff == NULL)
                 {
                     free(buff);
                     return NULL;
                 }
+                memcpy(new_buff, buff, buff_size);
+                buff_size *= 2;
 
                 buff = new_buff;
             }
 
-            len += snprintf(&buff[len], buff_size - len, "%s",
-                            mbus_data_variable_record_xml(record, i, -1, &(data->header)));
+            mbus_data_variable_record_xml(record, i, -1, &(data->header), var_hdr, 1024);
+            len += os_snprintf(buff+len, buff_size - len, "%s", var_hdr);
         }
-        len += snprintf(&buff[len], buff_size - len, "</MBusData>\n");
+        len += os_snprintf(buff+len, buff_size - len, "</MBusData>\n");
 
         return buff;
     }
@@ -4010,7 +4015,7 @@ mbus_data_variable_xml(mbus_data_variable *data)
 //------------------------------------------------------------------------------
 /// Generate XML representation of fixed-length frame.
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_data_fixed_xml(mbus_data_fixed *data)
 {
     char *buff = NULL;
@@ -4025,59 +4030,59 @@ mbus_data_fixed_xml(mbus_data_fixed *data)
         if (buff == NULL)
             return NULL;
 
-        len += snprintf(&buff[len], buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
+        len += os_snprintf(buff+len, buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
 
-        len += snprintf(&buff[len], buff_size - len, "<MBusData>\n\n");
+        len += os_snprintf(buff+len, buff_size - len, "<MBusData>\n\n");
 
-        len += snprintf(&buff[len], buff_size - len, "    <SlaveInformation>\n");
-        len += snprintf(&buff[len], buff_size - len, "        <Id>%lld</Id>\n", mbus_data_bcd_decode(data->id_bcd, 4));
+        len += os_snprintf(buff+len, buff_size - len, "    <SlaveInformation>\n");
+        len += os_snprintf(buff+len, buff_size - len, "        <Id>%lld</Id>\n", mbus_data_bcd_decode(data->id_bcd, 4));
 
         mbus_str_xml_encode(str_encoded, mbus_data_fixed_medium(data), sizeof(str_encoded));
-        len += snprintf(&buff[len], buff_size - len, "        <Medium>%s</Medium>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_size - len, "        <Medium>%s</Medium>\n", str_encoded);
 
-        len += snprintf(&buff[len], buff_size - len, "        <AccessNumber>%d</AccessNumber>\n", data->tx_cnt);
-        len += snprintf(&buff[len], buff_size - len, "        <Status>%.2X</Status>\n", data->status);
-        len += snprintf(&buff[len], buff_size - len, "    </SlaveInformation>\n\n");
+        len += os_snprintf(buff+len, buff_size - len, "        <AccessNumber>%d</AccessNumber>\n", data->tx_cnt);
+        len += os_snprintf(buff+len, buff_size - len, "        <Status>%.2X</Status>\n", data->status);
+        len += os_snprintf(buff+len, buff_size - len, "    </SlaveInformation>\n\n");
 
-        len += snprintf(&buff[len], buff_size - len, "    <DataRecord id=\"0\">\n");
+        len += os_snprintf(buff+len, buff_size - len, "    <DataRecord id=\"0\">\n");
 
         mbus_str_xml_encode(str_encoded, mbus_data_fixed_function(data->status), sizeof(str_encoded));
-        len += snprintf(&buff[len], buff_size - len, "        <Function>%s</Function>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_size - len, "        <Function>%s</Function>\n", str_encoded);
 
         mbus_str_xml_encode(str_encoded, mbus_data_fixed_unit(data->cnt1_type), sizeof(str_encoded));
-        len += snprintf(&buff[len], buff_size - len, "        <Unit>%s</Unit>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_size - len, "        <Unit>%s</Unit>\n", str_encoded);
         if ((data->status & MBUS_DATA_FIXED_STATUS_FORMAT_MASK) == MBUS_DATA_FIXED_STATUS_FORMAT_BCD)
         {
-            len += snprintf(&buff[len], buff_size - len, "        <Value>%lld</Value>\n", mbus_data_bcd_decode(data->cnt1_val, 4));
+            len += os_snprintf(buff+len, buff_size - len, "        <Value>%lld</Value>\n", mbus_data_bcd_decode(data->cnt1_val, 4));
         }
         else
         {
             mbus_data_int_decode(data->cnt1_val, 4, &val);
-            len += snprintf(&buff[len], buff_size - len, "        <Value>%d</Value>\n", val);
+            len += os_snprintf(buff+len, buff_size - len, "        <Value>%d</Value>\n", val);
         }
 
-        len += snprintf(&buff[len], buff_size - len, "    </DataRecord>\n\n");
+        len += os_snprintf(buff+len, buff_size - len, "    </DataRecord>\n\n");
 
-        len += snprintf(&buff[len], buff_size - len, "    <DataRecord id=\"1\">\n");
+        len += os_snprintf(buff+len, buff_size - len, "    <DataRecord id=\"1\">\n");
 
         mbus_str_xml_encode(str_encoded, mbus_data_fixed_function(data->status), sizeof(str_encoded));
-        len += snprintf(&buff[len], buff_size - len, "        <Function>%s</Function>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_size - len, "        <Function>%s</Function>\n", str_encoded);
 
         mbus_str_xml_encode(str_encoded, mbus_data_fixed_unit(data->cnt2_type), sizeof(str_encoded));
-        len += snprintf(&buff[len], buff_size - len, "        <Unit>%s</Unit>\n", str_encoded);
+        len += os_snprintf(buff+len, buff_size - len, "        <Unit>%s</Unit>\n", str_encoded);
         if ((data->status & MBUS_DATA_FIXED_STATUS_FORMAT_MASK) == MBUS_DATA_FIXED_STATUS_FORMAT_BCD)
         {
-            len += snprintf(&buff[len], buff_size - len, "        <Value>%lld</Value>\n", mbus_data_bcd_decode(data->cnt2_val, 4));
+            len += os_snprintf(buff+len, buff_size - len, "        <Value>%lld</Value>\n", mbus_data_bcd_decode(data->cnt2_val, 4));
         }
         else
         {
             mbus_data_int_decode(data->cnt2_val, 4, &val);
-            len += snprintf(&buff[len], buff_size - len, "        <Value>%d</Value>\n", val);
+            len += os_snprintf(buff+len, buff_size - len, "        <Value>%d</Value>\n", val);
         }
 
-        len += snprintf(&buff[len], buff_size - len, "    </DataRecord>\n\n");
+        len += os_snprintf(buff+len, buff_size - len, "    </DataRecord>\n\n");
 
-        len += snprintf(&buff[len], buff_size - len, "</MBusData>\n");
+        len += os_snprintf(buff+len, buff_size - len, "</MBusData>\n");
 
         return buff;
     }
@@ -4088,7 +4093,7 @@ mbus_data_fixed_xml(mbus_data_fixed *data)
 //------------------------------------------------------------------------------
 /// Generate XML representation of a general application error.
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_data_error_xml(int error)
 {
     char *buff = NULL;
@@ -4100,17 +4105,17 @@ mbus_data_error_xml(int error)
     if (buff == NULL)
         return NULL;
 
-    len += snprintf(&buff[len], buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
-    len += snprintf(&buff[len], buff_size - len, "<MBusData>\n\n");
+    len += os_snprintf(buff+len, buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
+    len += os_snprintf(buff+len, buff_size - len, "<MBusData>\n\n");
 
-    len += snprintf(&buff[len], buff_size - len, "    <SlaveInformation>\n");
+    len += os_snprintf(buff+len, buff_size - len, "    <SlaveInformation>\n");
 
     mbus_str_xml_encode(str_encoded, mbus_data_error_lookup(error), sizeof(str_encoded));
-    len += snprintf(&buff[len], buff_size - len, "        <Error>%s</Error>\n", str_encoded);
+    len += os_snprintf(buff+len, buff_size - len, "        <Error>%s</Error>\n", str_encoded);
 
-    len += snprintf(&buff[len], buff_size - len, "    </SlaveInformation>\n\n");
+    len += os_snprintf(buff+len, buff_size - len, "    </SlaveInformation>\n\n");
 
-    len += snprintf(&buff[len], buff_size - len, "</MBusData>\n");
+    len += os_snprintf(buff+len, buff_size - len, "</MBusData>\n");
 
     return buff;
 }
@@ -4118,7 +4123,7 @@ mbus_data_error_xml(int error)
 //------------------------------------------------------------------------------
 /// Return a string containing an XML representation of the M-BUS frame data.
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_frame_data_xml(mbus_frame_data *data)
 {
     if (data)
@@ -4146,7 +4151,7 @@ mbus_frame_data_xml(mbus_frame_data *data)
 //------------------------------------------------------------------------------
 /// Return an XML representation of the M-BUS frame.
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_frame_xml(mbus_frame *frame)
 {
     mbus_frame_data frame_data;
@@ -4157,6 +4162,7 @@ mbus_frame_xml(mbus_frame *frame)
 
     size_t len = 0, buff_size = 8192;
     int record_cnt = 0, frame_cnt;
+    char var_hdr[1024];
 
     if (frame)
     {
@@ -4202,15 +4208,15 @@ mbus_frame_xml(mbus_frame *frame)
             // is available (frame_cnt = -1 => not included in output)
             frame_cnt = (frame->next == NULL) ? -1 : 0;
 
-            len += snprintf(&buff[len], buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
+            len += os_snprintf(buff+len, buff_size - len, MBUS_XML_PROCESSING_INSTRUCTION);
 
-            len += snprintf(&buff[len], buff_size - len, "<MBusData>\n\n");
+            len += os_snprintf(buff+len, buff_size - len, "<MBusData>\n\n");
 
             // only print the header info for the first frame (should be
             // the same for each frame in a sequence of a multi-telegram
             // transfer.
-            len += snprintf(&buff[len], buff_size - len, "%s",
-                                    mbus_data_variable_header_xml(&(frame_data.data_var.header)));
+            mbus_data_variable_header_xml(&(frame_data.data_var.header), var_hdr, 1024);
+            len += os_snprintf(buff+len, buff_size - len, "%s", var_hdr);
 
             // loop through all records in the current frame, using a global
             // record count as record ID in the XML output
@@ -4218,21 +4224,22 @@ mbus_frame_xml(mbus_frame *frame)
             {
                 if ((buff_size - len) < 1024)
                 {
-                    buff_size *= 2;
-                    new_buff = (char*) realloc(buff,buff_size);
-
+                    new_buff = (char *)malloc(buff_size*2);
                     if (new_buff == NULL)
                     {
-                        free(buff);
                         mbus_data_record_free(frame_data.data_var.record);
+                        free(buff);
                         return NULL;
                     }
+                    memcpy(new_buff, buff, buff_size);
+                    buff_size *= 2;
 
                     buff = new_buff;
                 }
 
-                len += snprintf(&buff[len], buff_size - len, "%s",
-                                mbus_data_variable_record_xml(record, record_cnt, frame_cnt, &(frame_data.data_var.header)));
+                mbus_data_variable_record_xml(record, record_cnt, frame_cnt, &(frame_data.data_var.header), var_hdr, 1024);
+
+                len += os_snprintf(buff+len, buff_size - len, "%s", var_hdr, 1024);
             }
 
             // free all records in the list
@@ -4257,21 +4264,22 @@ mbus_frame_xml(mbus_frame *frame)
                 {
                     if ((buff_size - len) < 1024)
                     {
-                        buff_size *= 2;
-                        new_buff = (char*) realloc(buff,buff_size);
-
+                        new_buff = (char *)malloc(buff_size*2);
                         if (new_buff == NULL)
                         {
-                            free(buff);
                             mbus_data_record_free(frame_data.data_var.record);
+                            free(buff);
                             return NULL;
                         }
+                        memcpy(new_buff, buff, buff_size);
+                        buff_size *= 2;
 
                         buff = new_buff;
                     }
 
-                    len += snprintf(&buff[len], buff_size - len, "%s",
-                                    mbus_data_variable_record_xml(record, record_cnt, frame_cnt, &(frame_data.data_var.header)));
+                  mbus_data_variable_record_xml(record, record_cnt, frame_cnt, &(frame_data.data_var.header), var_hdr, 1024);
+
+                  len += os_snprintf(buff+len, buff_size - len, "%s", var_hdr, 1024);
                 }
 
                 // free all records in the list
@@ -4281,7 +4289,7 @@ mbus_frame_xml(mbus_frame *frame)
                 }
             }
 
-            len += snprintf(&buff[len], buff_size - len, "</MBusData>\n");
+            len += os_snprintf(buff+len, buff_size - len, "</MBusData>\n");
 
             return buff;
         }
@@ -4294,7 +4302,7 @@ mbus_frame_xml(mbus_frame *frame)
 //------------------------------------------------------------------------------
 /// Allocate and initialize a new frame data structure
 //------------------------------------------------------------------------------
-mbus_frame_data *
+mbus_frame_data * ICACHE_FLASH_ATTR 
 mbus_frame_data_new()
 {
     mbus_frame_data *data;
@@ -4316,7 +4324,7 @@ mbus_frame_data_new()
 //-----------------------------------------------------------------------------
 /// Free up data associated with a frame data structure
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_frame_data_free(mbus_frame_data *data)
 {
     if (data)
@@ -4335,7 +4343,7 @@ mbus_frame_data_free(mbus_frame_data *data)
 //------------------------------------------------------------------------------
 /// Allocate and initialize a new variable data record
 //------------------------------------------------------------------------------
-mbus_data_record *
+mbus_data_record * ICACHE_FLASH_ATTR 
 mbus_data_record_new()
 {
     mbus_data_record *record;
@@ -4355,7 +4363,7 @@ mbus_data_record_new()
 /// free up memory associated with a data record and all the subsequent records
 /// in its list (apply recursively)
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_data_record_free(mbus_data_record *record)
 {
     if (record)
@@ -4372,7 +4380,7 @@ mbus_data_record_free(mbus_data_record *record)
 //------------------------------------------------------------------------------
 /// Return a string containing an XML representation of the M-BUS frame.
 //------------------------------------------------------------------------------
-void
+void ICACHE_FLASH_ATTR 
 mbus_data_record_append(mbus_data_variable *data, mbus_data_record *record)
 {
     mbus_data_record *iter;
@@ -4398,7 +4406,7 @@ mbus_data_record_append(mbus_data_variable *data, mbus_data_record *record)
 // should be a 16 character string comprised of the device ID (4 bytes),
 // manufacturer ID (2 bytes), version (1 byte) and medium (1 byte).
 //------------------------------------------------------------------------------
-char *
+char * ICACHE_FLASH_ATTR 
 mbus_frame_get_secondary_address(mbus_frame *frame)
 {
     static char addr[32];
@@ -4407,7 +4415,7 @@ mbus_frame_get_secondary_address(mbus_frame *frame)
 
     if (frame == NULL || (data = mbus_frame_data_new()) == NULL)
     {
-        snprintf(error_str, sizeof(error_str),
+        os_snprintf(error_str, sizeof(error_str),
                  "%s: Failed to allocate data structure [%p, %p].",
                   __PRETTY_FUNCTION__, (void*)frame, (void*)data);
         return NULL;
@@ -4415,7 +4423,7 @@ mbus_frame_get_secondary_address(mbus_frame *frame)
 
     if (frame->control_information != MBUS_CONTROL_INFO_RESP_VARIABLE)
     {
-        snprintf(error_str, sizeof(error_str), "Non-variable data response (can't get secondary address from response).");
+        os_snprintf(error_str, sizeof(error_str), "Non-variable data response (can't get secondary address from response).");
         mbus_frame_data_free(data);
         return NULL;
     }
@@ -4428,7 +4436,7 @@ mbus_frame_get_secondary_address(mbus_frame *frame)
 
     id = (unsigned long) mbus_data_bcd_decode(data->data_var.header.id_bcd, 4);
 
-    snprintf(addr, sizeof(addr), "%08lu%02X%02X%02X%02X",
+    os_snprintf(addr, sizeof(addr), "%08lu%02X%02X%02X%02X",
              id,
              data->data_var.header.manufacturer[0],
              data->data_var.header.manufacturer[1],
@@ -4444,7 +4452,7 @@ mbus_frame_get_secondary_address(mbus_frame *frame)
 //------------------------------------------------------------------------------
 // Pack a secondary address string into an mbus frame
 //------------------------------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_frame_select_secondary_pack(mbus_frame *frame, char *address)
 {
     int val, i, j, k;
@@ -4452,13 +4460,13 @@ mbus_frame_select_secondary_pack(mbus_frame *frame, char *address)
 
     if (frame == NULL || address == NULL)
     {
-        snprintf(error_str, sizeof(error_str), "%s: frame or address arguments are NULL.", __PRETTY_FUNCTION__);
+        os_snprintf(error_str, sizeof(error_str), "%s: frame or address arguments are NULL.", __PRETTY_FUNCTION__);
         return -1;
     }
 
     if (mbus_is_secondary_address(address) == 0)
     {
-        snprintf(error_str, sizeof(error_str), "%s: address is invalid.", __PRETTY_FUNCTION__);
+        os_snprintf(error_str, sizeof(error_str), "%s: address is invalid.", __PRETTY_FUNCTION__);
         return -1;
     }
 
@@ -4514,7 +4522,7 @@ mbus_frame_select_secondary_pack(mbus_frame *frame, char *address)
 //---------------------------------------------------------
 // Checks if an integer is a valid primary address.
 //---------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_is_primary_address(int value)
 {
     return ((value >= 0x00) && (value <= 0xFF));
@@ -4523,7 +4531,7 @@ mbus_is_primary_address(int value)
 //---------------------------------------------------------
 // Checks if an string is a valid secondary address.
 //---------------------------------------------------------
-int
+int ICACHE_FLASH_ATTR 
 mbus_is_secondary_address(const char * value)
 {
     int i;
