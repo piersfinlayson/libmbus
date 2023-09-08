@@ -50,7 +50,11 @@ int ping_address(mbus_handle *handle, mbus_frame *reply, int address)
 // Primary addressing scanning of mbus devices.
 //------------------------------------------------------------------------------
 int
+#ifndef RPI_PICO
 main(int argc, char **argv)
+#else
+_mbus_serial_scan_main(int argc, char **argv)
+#endif
 {
     mbus_handle *handle;
     char *device;

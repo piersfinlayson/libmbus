@@ -8,10 +8,10 @@
 //
 //------------------------------------------------------------------------------
 
+#ifndef RPI_PICO
 #include <unistd.h>
 #include <limits.h>
 #include <fcntl.h>
-
 #include <sys/types.h>
 
 #include <stdio.h>
@@ -20,6 +20,15 @@
 #include <termios.h>
 #include <errno.h>
 #include <string.h>
+#else
+#include <stdio.h>
+#include <string.h>
+#include <pico/stdlib.h>
+#include <hardware/gpio.h>
+#include <hardware/uart.h>
+#define fprintf(fd, ...) printf(__VA_ARGS__)
+#define SSIZE_MAX (sizeof(ssize_t) * 256)
+#endif
 
 #include "mbus-serial.h"
 #include "mbus-protocol-aux.h"
@@ -35,7 +44,9 @@ mbus_serial_connect(mbus_handle *handle)
 {
     mbus_serial_data *serial_data;
     const char *device;
+#ifndef RPI_PICO
     struct termios *term;
+#endif
 
     if (handle == NULL)
         return -1;
@@ -45,11 +56,30 @@ mbus_serial_connect(mbus_handle *handle)
         return -1;
 
     device = serial_data->device;
+#ifndef RPI_PICO
     term = &(serial_data->t);
+#else
+    if (!strcmp(device, "UART0"))
+    {
+        printf("M-Bus: Using %s\n", device);
+        serial_data->uart = uart0;
+    }
+    else if (!strcmp(device, "UART1"))
+    {
+        printf("M-Bus: Using %s\n", device);
+        serial_data->uart = uart1;
+    }
+    else
+    {
+        fprintf(stderr, "%s: Invalid Pico UART: %s\n", __PRETTY_FUNCTION__, device);
+        return -1;
+    }
+#endif
     //
     // create the SERIAL connection
     //
 
+#ifndef RPI_PICO
     // Use blocking read and handle it by serial port VMIN/VTIME setting
     if ((handle->fd = open(device, O_RDWR | O_NOCTTY)) < 0)
     {
@@ -91,6 +121,39 @@ mbus_serial_connect(mbus_handle *handle)
 #endif
 
     tcsetattr(handle->fd, TCSANOW, term);
+#else
+    uint speed;
+    printf("M-Bus Set baudrate to %d\n", PICO_MBUS_BAUDRATE);
+    speed = uart_init(serial_data->uart, PICO_MBUS_BAUDRATE);
+    if (speed != PICO_MBUS_BAUDRATE)
+    {
+        fprintf(stderr, "%s: Failed to open UART: %s %d\n", __PRETTY_FUNCTION__, device, speed);
+        uart_deinit(serial_data->uart);
+        return -1;
+    }
+    if (serial_data->uart == uart0)
+    {
+        handle->fd = 0;
+    }
+    else
+    {
+        handle->fd = 1;
+    }
+    printf("M-Bus: TX Pin: %d\n", PICO_MBUS_UART_TX_PIN);
+    printf("M-Bus: RX Pin: %d\n", PICO_MBUS_UART_RX_PIN);
+    gpio_set_function(PICO_MBUS_UART_TX_PIN, GPIO_FUNC_UART);
+    gpio_set_function(PICO_MBUS_UART_RX_PIN, GPIO_FUNC_UART);
+    printf("M-Bus: Set flow control: CTS off RTS off\n");
+    uart_set_hw_flow(serial_data->uart, false, false);
+    printf("M-Bus: UART settings: Data %d Stop %d Parity %d\n",
+          PICO_MBUS_UART_DATA_BITS,
+          PICO_MBUS_UART_STOP_BITS,
+          PICO_MBUS_UART_PARITY);
+    uart_set_format(serial_data->uart,
+            PICO_MBUS_UART_DATA_BITS,
+            PICO_MBUS_UART_STOP_BITS,
+            PICO_MBUS_UART_PARITY);
+#endif    
 
     return 0;
 }
@@ -101,7 +164,11 @@ mbus_serial_connect(mbus_handle *handle)
 int
 mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
 {
+#ifndef RPI_PICO    
     speed_t speed;
+#else
+    uint speed;
+#endif
     mbus_serial_data *serial_data;
 
     if (handle == NULL)
@@ -112,6 +179,7 @@ mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
     if (serial_data == NULL)
         return -1;
 
+#ifndef RPI_PICO    
     switch (baudrate)
     {
         case 300:
@@ -175,6 +243,21 @@ mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
     {
         return -1;
     }
+#else
+    uart_inst_t *uart;
+    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    if (uart == NULL)
+    {
+        fprintf(stderr, "%s: Failed to get uart from handle %d\n", __PRETTY_FUNCTION__, handle->fd);
+        return -1;
+    }
+    speed = uart_set_baudrate(uart, (uint)baudrate);
+    if (speed != baudrate)
+    {
+        fprintf(stderr, "%s: Pico UART failed to set baudrate: %d %d %d\n", __PRETTY_FUNCTION__, handle->fd, baudrate, speed);
+        return -1;
+    }
+#endif
 
     return 0;
 }
@@ -191,6 +274,7 @@ mbus_serial_disconnect(mbus_handle *handle)
         return -1;
     }
 
+#ifndef RPI_PICO    
     if (handle->fd < 0)
     {
        return -1;
@@ -198,6 +282,15 @@ mbus_serial_disconnect(mbus_handle *handle)
 
     close(handle->fd);
     handle->fd = -1;
+#else
+    uart_inst_t *uart;
+    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    if (uart == NULL)
+    {
+        return -1;
+    }
+    uart_deinit(uart);
+#endif
 
     return 0;
 }
@@ -236,11 +329,21 @@ mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
         return -1;
     }
 
+#ifndef RPI_PICO
     // Make sure serial connection is open
     if (isatty(handle->fd) == 0)
     {
         return -1;
     }
+#else
+    uart_inst_t *uart;
+    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    if ((uart == NULL) || (!uart_is_enabled(uart)))
+    {
+        fprintf(stderr, "%s: Invalid UART or UART not enabled: %d\n", __PRETTY_FUNCTION__, handle->fd);
+        return -1;
+    }
+#endif
 
     if ((len = mbus_frame_pack(frame, buff, sizeof(buff))) == -1)
     {
@@ -259,6 +362,7 @@ mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
     printf("\n");
 #endif
 
+#ifndef RPI_PICO
     if ((ret = write(handle->fd, buff, len)) == len)
     {
         //
@@ -277,6 +381,12 @@ mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
     // wait until complete frame has been transmitted
     //
     tcdrain(handle->fd);
+#else
+#ifdef MBUS_SERIAL_DEBUG
+    printf("M-Bus: Transmitting %d bytes\n", len);
+#endif
+    uart_write_blocking(uart, buff, len);
+#endif    
 
     return 0;
 }
@@ -297,12 +407,23 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
         return MBUS_RECV_RESULT_ERROR;
     }
 
+#ifndef RPI_PICO
     // Make sure serial connection is open
     if (isatty(handle->fd) == 0)
     {
         fprintf(stderr, "%s: Serial connection is not available.\n", __PRETTY_FUNCTION__);
         return MBUS_RECV_RESULT_ERROR;
     }
+#else
+    uart_inst_t *uart;
+    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    if ((uart == NULL) || (!uart_is_enabled(uart)))
+    {
+        fprintf(stderr, "%s: Invalid UART or UART not enabled: %d", __PRETTY_FUNCTION__, handle->fd);
+        return MBUS_RECV_RESULT_ERROR;
+    }
+    sleep_ms(PICO_MBUS_RECV_DELAY);
+#endif
 
     memset((void *)buff, 0, sizeof(buff));
 
@@ -320,16 +441,32 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
             return MBUS_RECV_RESULT_ERROR;
         }
 
-        //printf("%s: Attempt to read %d bytes [len = %d]\n", __PRETTY_FUNCTION__, remaining, len);
+#ifdef MBUS_SERIAL_DEBUG
+        printf("%s: Attempt to read %d bytes [len = %d]\n", __PRETTY_FUNCTION__, remaining, len);
+#endif
 
+#ifndef RPI_PICO
         if ((nread = read(handle->fd, &buff[len], remaining)) == -1)
         {
        //     fprintf(stderr, "%s: aborting recv frame (remaining = %d, len = %d, nread = %d)\n",
          //          __PRETTY_FUNCTION__, remaining, len, nread);
             return MBUS_RECV_RESULT_ERROR;
         }
+#else
+        nread = 0;
+#ifdef MBUS_SERIAL_DEBUG
+        printf("M-Bus: Try to receive: nread %d readable %d\n", nread, uart_is_readable(uart));
+#endif
+        while ((nread < remaining) && uart_is_readable(uart))
+        {
+            buff[len+nread] = uart_getc(uart);
+            nread += 1;
+        }
+#endif        
 
-//   printf("%s: Got %d byte [remaining %d, len %d]\n", __PRETTY_FUNCTION__, nread, remaining, len);
+#ifdef MBUS_SERIAL_DEBUG
+        printf("%s: Got %d byte [remaining %d, len %d]\n", __PRETTY_FUNCTION__, nread, remaining, len);
+#endif
 
         if (nread == 0)
         {
@@ -368,7 +505,9 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
     if (remaining != 0)
     {
         // Would be OK when e.g. scanning the bus, otherwise it is a failure.
-        // printf("%s: M-Bus layer failed to receive complete data.\n", __PRETTY_FUNCTION__);
+#ifdef MBUS_SERIAL_DEBUG
+        printf("%s: M-Bus layer failed to receive complete data (OK when scanning bus)\n", __PRETTY_FUNCTION__);
+#endif
         return MBUS_RECV_RESULT_INVALID;
     }
 
@@ -380,3 +519,30 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
 
     return MBUS_RECV_RESULT_OK;
 }
+
+#ifdef RPI_PICO
+uart_inst_t *rpi_pico_get_uart_from_fd(int fd)
+{
+    uart_inst_t *uart;
+    if (fd == 0)
+    {
+#ifdef MBUS_SERIAL_DEBUG
+        printf("M-Bus: Retreived UART0\n");
+#endif
+        uart = uart0;
+    }
+    else if (fd == 1)
+    {
+#ifdef MBUS_SERIAL_DEBUG
+        printf("M-Bus: Retreived UART1\n");
+#endif
+        uart = uart1;
+    }
+    else
+    {
+        //fprintf(stderr, "%s: Pico UART fd is invalid: %d\n", __PRETTY_FUNCTION__, fd);
+        uart = NULL;
+    }
+    return uart;
+}
+#endif

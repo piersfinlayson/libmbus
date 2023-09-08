@@ -18,7 +18,11 @@
 #ifndef MBUS_SERIAL_H
 #define MBUS_SERIAL_H
 
+#ifndef RPI_PICO
 #include <termios.h>
+#else
+#include <hardware/uart.h>
+#endif
 #include "mbus-protocol-aux.h"
 #include "mbus-protocol.h"
 
@@ -30,7 +34,11 @@ extern "C" {
 typedef struct _mbus_serial_data
 {
     char *device;
+#ifndef RPI_PICO
     struct termios t;
+#else
+    uart_inst_t *uart;    
+#endif
 } mbus_serial_data;
 
 int  mbus_serial_connect(mbus_handle *handle);
@@ -39,6 +47,9 @@ int  mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame);
 int  mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame);
 int  mbus_serial_set_baudrate(mbus_handle *handle, long baudrate);
 void mbus_serial_data_free(mbus_handle *handle);
+#ifdef RPI_PICO
+uart_inst_t *rpi_pico_get_uart_from_fd(int);
+#endif
 
 #ifdef __cplusplus
 }

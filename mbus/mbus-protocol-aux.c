@@ -20,6 +20,10 @@
 #include <ctype.h>
 #include <math.h>
 
+#ifdef RPI_PICO
+#define fprintf(fd, ...) printf(__VA_ARGS__)
+#endif
+
 /*@ignore@*/
 #define MBUS_ERROR(...) fprintf (stderr, __VA_ARGS__)
 
