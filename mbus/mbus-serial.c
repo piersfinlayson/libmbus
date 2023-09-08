@@ -422,7 +422,6 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
         fprintf(stderr, "%s: Invalid UART or UART not enabled: %d", __PRETTY_FUNCTION__, handle->fd);
         return MBUS_RECV_RESULT_ERROR;
     }
-    sleep_ms(PICO_MBUS_RECV_DELAY);
 #endif
 
     memset((void *)buff, 0, sizeof(buff));
@@ -457,6 +456,7 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
 #ifdef MBUS_SERIAL_DEBUG
         printf("M-Bus: Try to receive: nread %d readable %d\n", nread, uart_is_readable(uart));
 #endif
+        sleep_ms(PICO_MBUS_RECV_DELAY);
         while ((nread < remaining) && uart_is_readable(uart))
         {
             buff[len+nread] = uart_getc(uart);
@@ -472,7 +472,11 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
         {
             timeouts++;
 
+#ifndef MBUS_SERIAL_DEBUG
             if (timeouts >= 3)
+#else
+            if (timeouts >= PICO_MBUS_RECV_TIMEOUTS)
+#endif            
             {
                 // abort to avoid endless loop
                 fprintf(stderr, "%s: Timeout\n", __PRETTY_FUNCTION__);

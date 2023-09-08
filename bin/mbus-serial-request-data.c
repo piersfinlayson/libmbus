@@ -18,7 +18,11 @@ static int debug = 0;
 //
 // init slave to get really the beginning of the records
 //
+#ifndef RPI_PICO
 static int
+#else
+int
+#endif
 init_slaves(mbus_handle *handle)
 {
     if (debug)
@@ -48,7 +52,11 @@ init_slaves(mbus_handle *handle)
 // Scan for devices using secondary addressing.
 //------------------------------------------------------------------------------
 int
+#ifndef RPI_PICO
 main(int argc, char **argv)
+#else
+_mbus_serial_scan_main(int argc, char **argv)
+#endif
 {
     mbus_frame reply;
     mbus_frame_data reply_data;
