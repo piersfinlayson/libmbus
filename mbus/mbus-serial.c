@@ -123,7 +123,7 @@ mbus_serial_connect(mbus_handle *handle)
     tcsetattr(handle->fd, TCSANOW, term);
 #else
     uint speed;
-    printf("M-Bus Set baudrate to %d\n", PICO_MBUS_BAUDRATE);
+    printf("M-Bus: Set baudrate to %d\n", PICO_MBUS_BAUDRATE);
     speed = uart_init(serial_data->uart, PICO_MBUS_BAUDRATE);
     if (speed != PICO_MBUS_BAUDRATE)
     {
