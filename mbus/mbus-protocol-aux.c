@@ -1515,6 +1515,7 @@ mbus_context_serial(const char *device)
         return NULL;
     }
 
+#ifdef RPI_PICO
     serial_data->rx_buf = (char *)malloc(PICO_MBUS_RX_BUF_LEN);
     if (serial_data->rx_buf == NULL)
     {
@@ -1524,6 +1525,7 @@ mbus_context_serial(const char *device)
         free(handle);
         return NULL;
     }
+#endif
 
     handle->max_data_retry = 3;
     handle->max_search_retry = 1;

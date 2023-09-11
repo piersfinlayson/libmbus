@@ -16,7 +16,7 @@ configure
 /libltdl/
 /ltmain.sh
 /missing
-src/config.h.in
+config.h.in
 /m4
 
 # configure stuff:
