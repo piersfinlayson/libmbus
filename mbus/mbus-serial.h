@@ -37,7 +37,12 @@ typedef struct _mbus_serial_data
 #ifndef RPI_PICO
     struct termios t;
 #else
-    uart_inst_t *uart;    
+    uart_inst_t *uart;
+    char *rx_buf;
+    uint16_t first;
+    uint16_t next;
+    uint16_t data_len;
+    int block_time_ms;
 #endif
 } mbus_serial_data;
 
@@ -48,7 +53,12 @@ int  mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame);
 int  mbus_serial_set_baudrate(mbus_handle *handle, long baudrate);
 void mbus_serial_data_free(mbus_handle *handle);
 #ifdef RPI_PICO
-uart_inst_t *rpi_pico_get_uart_from_fd(int);
+void mbus_serial_pico_buf_init(mbus_serial_data *serial_data);
+void mbus_serial_pico_buf_check(mbus_serial_data *serial_data);
+void mbus_serial_pico_read_into_rx_buf(mbus_serial_data *serial_data);
+ssize_t mbus_serial_pico_read(mbus_handle *handle, char *buf, ssize_t count);
+void mbus_serial_pico_rx_irq_handler();
+uart_inst_t *mbus_serial_pico_get_uart_from_fd(int);
 #endif
 
 #ifdef __cplusplus

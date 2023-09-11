@@ -1515,6 +1515,16 @@ mbus_context_serial(const char *device)
         return NULL;
     }
 
+    serial_data->rx_buf = (char *)malloc(PICO_MBUS_RX_BUF_LEN);
+    if (serial_data->rx_buf == NULL)
+    {
+        snprintf(error_str, sizeof(error_str), "%s: failed to allocate rx buf size %d", __PRETTY_FUNCTION__, PICO_MBUS_RX_BUF_LEN);
+        mbus_error_str_set(error_str);
+        free(serial_data);
+        free(handle);
+        return NULL;
+    }
+
     handle->max_data_retry = 3;
     handle->max_search_retry = 1;
     handle->is_serial = 1;

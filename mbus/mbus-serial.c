@@ -35,6 +35,171 @@
 #include "mbus-protocol.h"
 
 #define PACKET_BUFF_SIZE 2048
+#ifdef RPI_PICO
+volatile void *irq_uart_handle;
+
+// Initialize the rx buffer
+void mbus_serial_pico_buf_init(mbus_serial_data *serial_data)
+{
+    serial_data->first = 0;
+    serial_data->next = 0;
+    serial_data->data_len = 0;
+    irq_uart_handle = (void *)serial_data;
+}
+
+// Check for consistency
+void mbus_serial_pico_buf_check(mbus_serial_data *serial_data)
+{
+    int check_data_len;
+    // Check for buffer errors - if errors reinitialize the buffer
+    if ((serial_data->first >= PICO_MBUS_RX_BUF_LEN) ||
+        (serial_data->next >= PICO_MBUS_RX_BUF_LEN) ||
+        (serial_data->data_len > PICO_MBUS_RX_BUF_LEN) ||
+        ((serial_data->data_len == PICO_MBUS_RX_BUF_LEN) && 
+            (serial_data->next != serial_data->first)))
+    {
+#ifdef MBUS_SERIAL_DEBUG
+        printf("%s: Invalid buffer value: data_len: %d first: %d next: %d\n",
+               __PRETTY_FUNCTION__,
+               serial_data->data_len,
+               serial_data->first,
+               serial_data->next);
+#endif               
+        mbus_serial_pico_buf_init(serial_data);
+    }
+    check_data_len = (serial_data->next - serial_data->first) % PICO_MBUS_RX_BUF_LEN;
+    if (check_data_len < 0)
+    {
+        check_data_len = PICO_MBUS_RX_BUF_LEN + check_data_len;
+    }
+    if (check_data_len != (serial_data->data_len % PICO_MBUS_RX_BUF_LEN))
+    {
+#ifdef MBUS_SERIAL_DEBUG
+        printf("%s: Invalid data_len: %d first: %d next: %d\n",
+               __PRETTY_FUNCTION__,
+               serial_data->data_len,
+               serial_data->first,
+               serial_data->next);
+#endif
+        mbus_serial_pico_buf_init(serial_data);
+    }
+}
+
+// Read all outstanding RX data into ring buffer
+void mbus_serial_pico_read_into_rx_buf(mbus_serial_data *serial_data)
+{
+    bool discard = false;
+    char byte_read;
+
+    // Do all of our checks within this while loop, as we the know that we're about to read in at least one byte
+    while (uart_is_readable(serial_data->uart))
+    {
+        mbus_serial_pico_buf_check(serial_data);
+
+        // Check if the buffer is already full
+        if (serial_data->data_len == PICO_MBUS_RX_BUF_LEN)
+        {
+#ifdef PICO_MBUS_RX_BUF_FULL_OVERWRITE
+            if (PICO_MBUS_RX_BUF_FULL_OVERWRITE)
+#else
+            if (false)
+#endif                
+            {
+                serial_data->first++;
+                serial_data->data_len--;
+                if (serial_data->first >= PICO_MBUS_RX_BUF_LEN)
+                {
+                    serial_data->first = 0;
+                }
+            }
+            else
+            {
+                discard = true;
+            }
+        }
+
+        // Get the byte and store it if the buffer isn't full (and we've not be told to overwrite)
+        byte_read = uart_getc(serial_data->uart);
+        if (!discard)
+        {
+            serial_data->rx_buf[serial_data->next] = byte_read;
+            serial_data->next++;
+            serial_data->data_len++;
+            if (serial_data->next >= PICO_MBUS_RX_BUF_LEN)
+            {
+                serial_data->next = 0;
+            }
+        }
+    }
+}
+
+// Get a character from the ring buffer, into buf.  Get up to len chars if available.
+// Don't block.  Use similar prototype to read, but use mbus_handle instead of int fd for first param
+ssize_t mbus_serial_pico_read(mbus_handle *handle, char *buf, ssize_t count)
+{
+    ssize_t read = 0;
+    bool waited;
+    mbus_serial_data *serial_data;
+
+
+    if ((handle == NULL) || (handle->auxdata == NULL))
+    {
+        return -1;
+    }
+    serial_data = (mbus_serial_data *)handle->auxdata;
+    if (serial_data->rx_buf == NULL)
+    {
+        read = -1;
+        return read;
+    }
+    mbus_serial_pico_buf_check(serial_data);
+
+    waited = false;
+    while ((read < count) && 
+           ((serial_data->data_len > 0) || !waited))
+    {
+        if (serial_data->data_len == 0)
+        {
+            if (!waited)
+            {
+                // Naive implementation - just wait the entire allowed time
+#ifdef MBUS_SERIAL_DEBUG            
+                printf("%s: Pausing for %dms for data\n", __PRETTY_FUNCTION__, PICO_MBUS_RX_WAIT_TIME_MS);
+#endif
+                sleep_ms(PICO_MBUS_RX_WAIT_TIME_MS);
+                waited = true;
+            }
+        }
+        else
+        {
+#ifdef MBUS_SERIAL_DEBUG            
+            printf("%s: There's %d bytes in the rx_buffer, read one out\n", __PRETTY_FUNCTION__, serial_data->data_len);
+#endif
+            *buf = serial_data->rx_buf[serial_data->first];
+            buf++;
+            read++;
+            serial_data->first++;
+            serial_data->data_len--;
+            if (serial_data->first >= PICO_MBUS_RX_BUF_LEN)
+            {
+                serial_data->first = 0;
+            }
+        }
+    }
+
+    return read;
+}
+
+// Reads RX data into a ring buffer
+void mbus_serial_pico_rx_irq_handler()
+{
+    if (irq_uart_handle != NULL)
+    {
+        mbus_serial_data *serial_data = (mbus_serial_data *)irq_uart_handle;
+        mbus_serial_pico_read_into_rx_buf(serial_data);
+    }
+}
+#endif
 
 //------------------------------------------------------------------------------
 /// Set up a serial connection handle.
@@ -52,7 +217,11 @@ mbus_serial_connect(mbus_handle *handle)
         return -1;
 
     serial_data = (mbus_serial_data *) handle->auxdata;
+#ifndef RPI_PICO
     if (serial_data == NULL || serial_data->device == NULL)
+#else
+    if (serial_data == NULL || serial_data->device == NULL || serial_data->rx_buf == NULL)
+#endif
         return -1;
 
     device = serial_data->device;
@@ -74,6 +243,9 @@ mbus_serial_connect(mbus_handle *handle)
         fprintf(stderr, "%s: Invalid Pico UART: %s\n", __PRETTY_FUNCTION__, device);
         return -1;
     }
+    mbus_serial_pico_buf_init(serial_data);
+    serial_data->block_time_ms = PICO_MBUS_RX_WAIT_TIME_MS;
+
 #endif
     //
     // create the SERIAL connection
@@ -153,6 +325,15 @@ mbus_serial_connect(mbus_handle *handle)
             PICO_MBUS_UART_DATA_BITS,
             PICO_MBUS_UART_STOP_BITS,
             PICO_MBUS_UART_PARITY);
+
+    // As we're using interrupt handling, we disable the FIFO handler
+    uart_set_fifo_enabled(serial_data->uart, false);
+    int uart_irq = serial_data->uart == uart0 ? UART0_IRQ : UART1_IRQ;
+    irq_set_exclusive_handler(uart_irq, mbus_serial_pico_rx_irq_handler);
+    irq_set_enabled(uart_irq, true);
+    uart_set_irq_enables(serial_data->uart, true, false);
+    printf("M-Bus: IRQ Handler registered\n");
+
 #endif    
 
     return 0;
@@ -245,7 +426,7 @@ mbus_serial_set_baudrate(mbus_handle *handle, long baudrate)
     }
 #else
     uart_inst_t *uart;
-    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    uart = mbus_serial_pico_get_uart_from_fd(handle->fd);
     if (uart == NULL)
     {
         fprintf(stderr, "%s: Failed to get uart from handle %d\n", __PRETTY_FUNCTION__, handle->fd);
@@ -284,7 +465,7 @@ mbus_serial_disconnect(mbus_handle *handle)
     handle->fd = -1;
 #else
     uart_inst_t *uart;
-    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    uart = mbus_serial_pico_get_uart_from_fd(handle->fd);
     if (uart == NULL)
     {
         return -1;
@@ -337,7 +518,7 @@ mbus_serial_send_frame(mbus_handle *handle, mbus_frame *frame)
     }
 #else
     uart_inst_t *uart;
-    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    uart = mbus_serial_pico_get_uart_from_fd(handle->fd);
     if ((uart == NULL) || (!uart_is_enabled(uart)))
     {
         fprintf(stderr, "%s: Invalid UART or UART not enabled: %d\n", __PRETTY_FUNCTION__, handle->fd);
@@ -416,7 +597,7 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
     }
 #else
     uart_inst_t *uart;
-    uart = rpi_pico_get_uart_from_fd(handle->fd);
+    uart = mbus_serial_pico_get_uart_from_fd(handle->fd);
     if ((uart == NULL) || (!uart_is_enabled(uart)))
     {
         fprintf(stderr, "%s: Invalid UART or UART not enabled: %d", __PRETTY_FUNCTION__, handle->fd);
@@ -446,23 +627,16 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
 
 #ifndef RPI_PICO
         if ((nread = read(handle->fd, &buff[len], remaining)) == -1)
+#else
+        if ((nread = mbus_serial_pico_read(handle, &buff[len], remaining)) == -1)
+#endif
         {
-       //     fprintf(stderr, "%s: aborting recv frame (remaining = %d, len = %d, nread = %d)\n",
-         //          __PRETTY_FUNCTION__, remaining, len, nread);
+#ifdef MBUS_SERIAL_DEBUG
+            fprintf(stderr, "%s: aborting recv frame (remaining = %d, len = %d, nread = %d)\n",
+                   __PRETTY_FUNCTION__, remaining, len, nread);
+#endif                   
             return MBUS_RECV_RESULT_ERROR;
         }
-#else
-        nread = 0;
-#ifdef MBUS_SERIAL_DEBUG
-        printf("M-Bus: Try to receive: nread %d readable %d\n", nread, uart_is_readable(uart));
-#endif
-        sleep_ms(PICO_MBUS_RECV_DELAY);
-        while ((nread < remaining) && uart_is_readable(uart))
-        {
-            buff[len+nread] = uart_getc(uart);
-            nread += 1;
-        }
-#endif        
 
 #ifdef MBUS_SERIAL_DEBUG
         printf("%s: Got %d byte [remaining %d, len %d]\n", __PRETTY_FUNCTION__, nread, remaining, len);
@@ -472,11 +646,7 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
         {
             timeouts++;
 
-#ifndef MBUS_SERIAL_DEBUG
             if (timeouts >= 3)
-#else
-            if (timeouts >= PICO_MBUS_RECV_TIMEOUTS)
-#endif            
             {
                 // abort to avoid endless loop
                 fprintf(stderr, "%s: Timeout\n", __PRETTY_FUNCTION__);
@@ -525,7 +695,7 @@ mbus_serial_recv_frame(mbus_handle *handle, mbus_frame *frame)
 }
 
 #ifdef RPI_PICO
-uart_inst_t *rpi_pico_get_uart_from_fd(int fd)
+uart_inst_t *mbus_serial_pico_get_uart_from_fd(int fd)
 {
     uart_inst_t *uart;
     if (fd == 0)
