@@ -18,3 +18,8 @@ cd libmbus
 ./build.sh
 sudo make install
 ```
+
+You may need to run:
+```
+export LD_LIBRARY_PATH=/usr/local/lib
+```
