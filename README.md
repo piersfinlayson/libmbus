@@ -9,3 +9,12 @@ the M-Bus. The role of libmbus is to decode/encode M-bus data, and to handle
 the communication with M-Bus devices.
 
 For more information see http://www.rscada.se/libmbus
+
+To get and build:
+```
+sudo apt install git libtool autoconf cmake build-essential
+git clone https://github.com/rscada/libmbus
+cd libmbus
+./build.sh
+sudo make install
+```
