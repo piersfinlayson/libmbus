@@ -12,7 +12,7 @@ For more information see http://www.rscada.se/libmbus
 
 To get and build:
 ```
-sudo apt install git libtool autoconf cmake build-essential
+sudo apt -y install git libtool autoconf cmake build-essential
 git clone https://github.com/rscada/libmbus
 cd libmbus
 ./build.sh
